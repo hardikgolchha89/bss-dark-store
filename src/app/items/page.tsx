@@ -3,6 +3,7 @@ import { Partner } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/current-user";
 import ItemsTable from "./ItemsTable";
+import ErpCodeUpload from "./ErpCodeUpload";
 
 export default async function ItemsPage() {
   const [items, canEdit] = await Promise.all([
@@ -22,6 +23,7 @@ export default async function ItemsPage() {
           ERPNext export only includes items with a code.
         </p>
       </div>
+      {canEdit && <ErpCodeUpload />}
       <ItemsTable
         canEdit={canEdit}
         items={items.map((i) => ({
