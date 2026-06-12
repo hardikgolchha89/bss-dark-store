@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { getSettingsMap } from "@/lib/run-engine";
 import { getCurrentUser, isAdmin } from "@/lib/current-user";
 import SettingsForm from "./SettingsForm";
+import SheetsSync from "./SheetsSync";
 
 export default async function AdminPage() {
   const [values, admin, user] = await Promise.all([getSettingsMap(), isAdmin(), getCurrentUser()]);
@@ -16,7 +17,10 @@ export default async function AdminPage() {
         </p>
       </div>
       {admin ? (
-        <SettingsForm values={values} />
+        <>
+          <SettingsForm values={values} />
+          <SheetsSync spreadsheetId={values.sheets_spreadsheet_id ?? ""} />
+        </>
       ) : (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           You&apos;re not an admin. Ask an admin to change these settings.
