@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/current-user";
+import DeleteRunButton from "./DeleteRunButton";
 
 async function createRun(formData: FormData) {
   "use server";
@@ -59,12 +60,13 @@ export default async function RunsPage() {
               <th className="px-4 py-2 font-medium">Stock rows</th>
               <th className="px-4 py-2 font-medium">Unmapped</th>
               <th className="px-4 py-2 font-medium">By</th>
+              <th className="px-4 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody>
             {runs.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-neutral-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
                   No runs yet. Create one above.
                 </td>
               </tr>
@@ -91,6 +93,9 @@ export default async function RunsPage() {
                 <td className="px-4 py-2 text-neutral-600">{r._count.stocks}</td>
                 <td className="px-4 py-2 text-neutral-600">{r._count.unmapped}</td>
                 <td className="px-4 py-2 text-neutral-500">{r.createdBy?.email ?? "—"}</td>
+                <td className="px-4 py-2 text-right">
+                  <DeleteRunButton runId={r.id} label={`${r.runDate.toISOString().slice(0, 10)}${r.label ? " · " + r.label : ""}`} />
+                </td>
               </tr>
             ))}
           </tbody>
