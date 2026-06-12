@@ -20,7 +20,7 @@ export interface ConsolidatedLine {
 // Total requirement per item across every store (adjusted > 0).
 export async function buildConsolidated(runId: string): Promise<ConsolidatedLine[]> {
   const reqs = await prisma.runRequirement.findMany({
-    where: { runId, adjusted: { gt: 0 } },
+    where: { runId, adjusted: { gt: 0 }, removed: false },
     include: { item: { include: { partnerSkus: { where: { partner: Partner.HK } } } } },
   });
   const byItem = new Map<string, ConsolidatedLine>();

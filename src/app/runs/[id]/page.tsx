@@ -11,6 +11,7 @@ import RequirementGrid from "./RequirementGrid";
 import FinalizeButton from "./FinalizeButton";
 import UnmappedPanel from "./UnmappedPanel";
 import PhaseControls from "./PhaseControls";
+import RemoveItemButton from "./RemoveItemButton";
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,7 +21,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const [stores, reqs, unmapped, items, settings] = await Promise.all([
     prisma.store.findMany({ where: { active: true }, orderBy: [{ partner: "asc" }, { sortOrder: "asc" }] }),
     prisma.runRequirement.findMany({
-      where: { runId: id },
+      where: { runId: id, removed: false },
       include: {
         item: { include: { partnerSkus: { where: { partner: Partner.HK } } } },
         store: true,
@@ -77,10 +78,11 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   }));
 
   // Order preview: consolidated by item, mapped lines only (what's actually pushed).
-  const orderMap = new Map<string, { sku: string; name: string; category: string; total: number; stores: number }>();
+  const orderMap = new Map<string, { itemId: string; sku: string; name: string; category: string; total: number; stores: number }>();
   for (const r of reqs) {
     if (r.adjusted <= 0) continue;
     const g = orderMap.get(r.itemId) ?? {
+      itemId: r.itemId,
       sku: r.item.partnerSkus[0]?.skuCode ?? "",
       name: r.item.name,
       category: r.item.category ?? "",
@@ -179,7 +181,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
 
       <RequirementGrid runId={id} rows={gridRows} isFinal={isFinal} />
 
-      <OrderPreview lines={orderLines} lineCount={orderLineCount} />
+      <OrderPreview runId={id} lines={orderLines} lineCount={orderLineCount} isFinal={isFinal} />
 
       <ProcurementPanel runId={id} procurement={procurement} />
 
@@ -189,11 +191,15 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
 }
 
 function OrderPreview({
+  runId,
   lines,
   lineCount,
+  isFinal,
 }: {
-  lines: { sku: string; name: string; category: string; total: number; stores: number }[];
+  runId: string;
+  lines: { itemId: string; sku: string; name: string; category: string; total: number; stores: number }[];
   lineCount: number;
+  isFinal: boolean;
 }) {
   const grandTotal = lines.reduce((a, l) => a + l.total, 0);
   return (
@@ -212,12 +218,13 @@ function OrderPreview({
                 <th className="px-3 py-2 font-medium">Category</th>
                 <th className="px-3 py-2 text-right font-medium">Stores</th>
                 <th className="px-3 py-2 text-right font-medium">Total qty</th>
+                <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {lines.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-neutral-400">
+                  <td colSpan={6} className="px-3 py-6 text-center text-neutral-400">
                     Nothing to order yet (all adjusted quantities are zero).
                   </td>
                 </tr>
@@ -229,6 +236,9 @@ function OrderPreview({
                   <td className="px-3 py-1.5 text-neutral-500">{l.category}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-neutral-500">{l.stores}</td>
                   <td className="px-3 py-1.5 text-right font-medium tabular-nums">{l.total}</td>
+                  <td className="px-2 py-1.5 text-right">
+                    {!isFinal && <RemoveItemButton runId={runId} itemId={l.itemId} name={l.name} />}
+                  </td>
                 </tr>
               ))}
             </tbody>

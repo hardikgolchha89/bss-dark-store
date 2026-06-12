@@ -119,6 +119,20 @@ export async function resolveUnmapped(runId: string, unmappedId: string, itemId:
   revalidatePath(`/runs/${runId}`);
 }
 
+// Remove a single requirement line (one item at one store) from the order.
+export async function removeRequirementLine(runId: string, reqId: string) {
+  await assertDraft(runId);
+  await prisma.runRequirement.update({ where: { id: reqId }, data: { removed: true } });
+  revalidatePath(`/runs/${runId}`);
+}
+
+// Remove an item from the whole order (every store) — used from the consolidated preview.
+export async function removeItemFromOrder(runId: string, itemId: string) {
+  await assertDraft(runId);
+  await prisma.runRequirement.updateMany({ where: { runId, itemId }, data: { removed: true } });
+  revalidatePath(`/runs/${runId}`);
+}
+
 export async function ignoreUnmapped(runId: string, unmappedId: string) {
   await assertDraft(runId);
   await prisma.unmappedSku.update({ where: { id: unmappedId }, data: { ignored: true } });

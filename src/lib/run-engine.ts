@@ -221,7 +221,7 @@ export async function buildPOExport(runId: string, partner: Partner): Promise<Ex
   await assertDistribution(runId);
   const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
   const reqs = await prisma.runRequirement.findMany({
-    where: { runId, store: { partner }, adjusted: { gt: 0 } },
+    where: { runId, store: { partner }, adjusted: { gt: 0 }, removed: false },
     include: {
       store: true,
       item: { include: { partnerSkus: { where: { partner } } } },
@@ -263,7 +263,7 @@ export async function buildErpExport(runId: string): Promise<ExportFile> {
   const source = settings.erpnext_source_warehouse;
 
   const reqs = await prisma.runRequirement.findMany({
-    where: { runId, adjusted: { gt: 0 }, item: { erpnextCode: { not: null } } },
+    where: { runId, adjusted: { gt: 0 }, removed: false, item: { erpnextCode: { not: null } } },
     include: { store: true, item: true },
     orderBy: [{ store: { sortOrder: "asc" } }, { item: { name: "asc" } }],
   });
@@ -292,7 +292,7 @@ export async function buildPrimePoZip(runId: string): Promise<ExportFile> {
   if (asBool(settings.rebel_export_enabled)) enabledPartners.add(Partner.REBEL);
 
   const reqs = await prisma.runRequirement.findMany({
-    where: { runId, adjusted: { gt: 0 } },
+    where: { runId, adjusted: { gt: 0 }, removed: false },
     include: { store: true, item: { include: { partnerSkus: true } } },
     orderBy: [{ store: { sortOrder: "asc" } }, { item: { name: "asc" } }],
   });
@@ -329,7 +329,7 @@ export async function buildErpZip(runId: string): Promise<ExportFile> {
   const source = settings.erpnext_source_warehouse;
 
   const reqs = await prisma.runRequirement.findMany({
-    where: { runId, adjusted: { gt: 0 }, item: { erpnextCode: { not: null } } },
+    where: { runId, adjusted: { gt: 0 }, removed: false, item: { erpnextCode: { not: null } } },
     include: { store: true, item: true },
     orderBy: [{ store: { sortOrder: "asc" } }, { item: { name: "asc" } }],
   });
@@ -360,7 +360,7 @@ export async function buildErpZip(runId: string): Promise<ExportFile> {
 export async function buildConsolidatedExport(runId: string): Promise<ExportFile> {
   const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
   const reqs = await prisma.runRequirement.findMany({
-    where: { runId, adjusted: { gt: 0 } },
+    where: { runId, adjusted: { gt: 0 }, removed: false },
     include: { item: { include: { partnerSkus: { where: { partner: Partner.HK } } } } },
   });
   const byItem = new Map<string, ConsolidatedLine>();

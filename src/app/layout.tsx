@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description: "Daily dark-store stock checks, requirements, and partner POs.",
 };
 
+export const viewport = { themeColor: "#faf8f5" };
+
 const NAV = [
   { href: "/", label: "Runs" },
   { href: "/items", label: "Items" },
@@ -18,15 +20,23 @@ const NAV = [
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-neutral-50 text-neutral-900 antialiased">
-        <header className="border-b border-neutral-200 bg-white">
+      <body className="min-h-screen bg-cream text-navy antialiased">
+        <header className="border-b border-line bg-white/80 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
-            <Link href="/" className="font-semibold tracking-tight">
-              BSS Darkstore
+            <Link href="/" className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/wordmark-color.png" alt="Bombay Sweet Shop" className="h-7 w-auto" />
+              <span className="hidden font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted sm:inline">
+                Darkstore Ops
+              </span>
             </Link>
-            <nav className="flex gap-4 text-sm text-neutral-600">
+            <nav className="ml-auto flex gap-1 text-sm">
               {NAV.map((n) => (
-                <Link key={n.href} href={n.href} className="hover:text-neutral-900">
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className="rounded-md px-3 py-1.5 font-medium text-ink-soft transition-colors hover:bg-teal/10 hover:text-teal-dark"
+                >
                   {n.label}
                 </Link>
               ))}

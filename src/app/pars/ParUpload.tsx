@@ -31,7 +31,7 @@ export default function ParUpload({ canEdit }: { canEdit: boolean }) {
           <input type="file" name="file" accept=".xlsx,.csv" required className="text-sm" />
           <button
             disabled={pending}
-            className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+            className="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy-light disabled:opacity-50"
           >
             {pending ? "Uploading…" : "Bulk upload"}
           </button>

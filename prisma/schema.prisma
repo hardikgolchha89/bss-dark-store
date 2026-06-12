@@ -200,6 +200,7 @@ model RunRequirement {
   suggested Int
   adjusted  Int
   edited    Boolean  @default(false) // user changed adjusted; recompute won't reset it
+  removed   Boolean  @default(false) // user removed this line; excluded from views + exports
   updatedAt DateTime @updatedAt @map("updated_at") // optimistic concurrency
 
   run   Run   @relation(fields: [runId], references: [id], onDelete: Cascade)

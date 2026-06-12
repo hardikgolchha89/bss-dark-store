@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { saveAdjusted } from "./actions";
+import { removeRequirementLine, saveAdjusted } from "./actions";
 
 interface Row {
   id: string;
@@ -91,6 +91,7 @@ export default function RequirementGrid({
               <th className="px-3 py-2 text-right font-medium">Live</th>
               <th className="px-3 py-2 text-right font-medium">Suggested</th>
               <th className="px-3 py-2 text-right font-medium">Adjusted</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -120,6 +121,22 @@ export default function RequirementGrid({
                       } disabled:bg-neutral-100`}
                     />
                     {errors[r.id] && <div className="text-[10px] text-red-600">{errors[r.id]}</div>}
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    {!isFinal && (
+                      <button
+                        title="Remove this line from the order"
+                        onClick={() => {
+                          if (!confirm(`Remove "${r.itemName}" from ${r.storeName}'s order?`)) return;
+                          start(async () => {
+                            await removeRequirementLine(runId, r.id);
+                          });
+                        }}
+                        className="rounded px-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
