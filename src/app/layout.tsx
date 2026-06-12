@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
-import UserMenu from "./UserMenu";
 
 export const metadata: Metadata = {
   title: "BSS Darkstore Replenishment",
@@ -32,7 +31,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               ))}
             </nav>
-            <UserMenu />
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
