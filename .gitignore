@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.env
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+
+.npm-cache/
+/src/generated/
+.vercel
+.DS_Store
+.agents/
+.claude/
+.gstack/
+skills-lock.json

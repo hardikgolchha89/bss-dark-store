@@ -1,0 +1,7 @@
+data/
+scripts/
+.npm-cache/
+*.md
+.gstack/
+.agents/
+.claude/
