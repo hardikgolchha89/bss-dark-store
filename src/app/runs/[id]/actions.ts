@@ -13,6 +13,7 @@ import {
   recomputeStore,
   reopenProcurement,
   setAdjusted,
+  setRunDayType,
 } from "@/lib/run-engine";
 import { isAdmin } from "@/lib/current-user";
 import type { UploadOutcome } from "./types";
@@ -164,6 +165,20 @@ export async function reopenToProcurement(runId: string): Promise<{ ok: boolean;
   if (!(await isAdmin())) return { ok: false, message: "Admins only." };
   try {
     await reopenProcurement(runId);
+    revalidatePath(`/runs/${runId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
+  }
+}
+
+export async function changeDayType(
+  runId: string,
+  dayType: "NORMAL" | "WEEKEND" | "PEAK",
+): Promise<{ ok: boolean; message?: string }> {
+  await assertDraft(runId);
+  try {
+    await setRunDayType(runId, dayType);
     revalidatePath(`/runs/${runId}`);
     return { ok: true };
   } catch (e) {

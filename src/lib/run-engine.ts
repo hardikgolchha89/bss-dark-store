@@ -23,8 +23,26 @@ export async function getSettingsMap(): Promise<Record<string, string>> {
   return map;
 }
 
+// Weekend/peak buffer % for a run, from its day type + admin settings.
+export async function getRunBufferPct(runId: string): Promise<number> {
+  const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
+  if (run.dayType === "NORMAL") return 0;
+  const s = await getSettingsMap();
+  const key = run.dayType === "WEEKEND" ? "weekend_buffer_pct" : "peak_buffer_pct";
+  return Math.max(0, Number(s[key]) || 0);
+}
+
+function bufferedPar(par: number, bufferPct: number): number {
+  return Math.round(par * (1 + bufferPct / 100));
+}
+
 // ---- draft recompute (per store: fast, called after each upload) -----------
-export async function recomputeStore(runId: string, storeId: string): Promise<void> {
+export async function recomputeStore(
+  runId: string,
+  storeId: string,
+  bufferPct?: number,
+): Promise<void> {
+  const pct = bufferPct ?? (await getRunBufferPct(runId));
   const store = await prisma.store.findUniqueOrThrow({ where: { id: storeId } });
 
   const [stocks, overrides, templates] = await Promise.all([
@@ -49,7 +67,8 @@ export async function recomputeStore(runId: string, storeId: string): Promise<vo
 
   const ops: Prisma.PrismaPromise<unknown>[] = [];
   for (const itemId of itemIds) {
-    const par = resolvePar(overrideByItem.get(itemId), templateByItem.get(itemId));
+    const basePar = resolvePar(overrideByItem.get(itemId), templateByItem.get(itemId));
+    const par = bufferedPar(basePar, pct); // effective par after weekend/peak buffer
     const live = liveByItem.get(itemId) ?? 0;
     const suggested = suggestedQty(par, live);
     const prev = existingByItem.get(itemId);
@@ -81,12 +100,21 @@ export async function recomputeStore(runId: string, storeId: string): Promise<vo
 }
 
 export async function recomputeAll(runId: string): Promise<void> {
+  const pct = await getRunBufferPct(runId);
   const storeIds = await prisma.runStock.findMany({
     where: { runId },
     distinct: ["storeId"],
     select: { storeId: true },
   });
-  for (const { storeId } of storeIds) await recomputeStore(runId, storeId);
+  for (const { storeId } of storeIds) await recomputeStore(runId, storeId, pct);
+}
+
+// Change a run's day type (Normal/Weekend/Peak) and re-apply the buffer.
+export async function setRunDayType(runId: string, dayType: "NORMAL" | "WEEKEND" | "PEAK"): Promise<void> {
+  const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
+  if (run.status === RunStatus.FINALIZED) throw new Error("Run is finalized.");
+  await prisma.run.update({ where: { id: runId }, data: { dayType } });
+  await recomputeAll(runId);
 }
 
 // ---- ingest one store's Prime stock ---------------------------------------

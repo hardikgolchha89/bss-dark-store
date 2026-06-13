@@ -38,6 +38,12 @@ enum RunPhase {
   DISTRIBUTION
 }
 
+enum DayType {
+  NORMAL
+  WEEKEND
+  PEAK
+}
+
 enum StockSource {
   PRIME_CSV
   MANUAL
@@ -153,6 +159,7 @@ model Run {
   runDate     DateTime  @map("run_date") @db.Date
   label       String    @default("")
   status      RunStatus @default(DRAFT)
+  dayType     DayType   @default(NORMAL) // applies a global weekend/peak buffer % to pars
   phase       RunPhase  @default(PROCUREMENT) // procurement -> (receive) -> distribution
   receivedAt  DateTime? @map("received_at") // when goods received; unlocks distribution
   createdById String?   @map("created_by_id")

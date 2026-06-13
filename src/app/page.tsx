@@ -11,9 +11,11 @@ async function createRun(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();
   const dateStr = String(formData.get("runDate") ?? "");
   const runDate = dateStr ? new Date(dateStr) : new Date();
+  const dt = String(formData.get("dayType") ?? "NORMAL");
+  const dayType = dt === "WEEKEND" || dt === "PEAK" ? dt : "NORMAL";
   const user = await getCurrentUser();
   const run = await prisma.run.create({
-    data: { runDate, label, createdById: user?.id ?? null },
+    data: { runDate, label, dayType, createdById: user?.id ?? null },
   });
   revalidatePath("/");
   redirect(`/runs/${run.id}`);
@@ -77,6 +79,14 @@ export default async function RunsPage() {
         <label className="text-sm">
           <span className="mb-1 block text-neutral-500">Label (optional)</span>
           <input name="label" placeholder="e.g. Morning" className="rounded border border-neutral-300 px-2 py-1.5" />
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-neutral-500">Day type</span>
+          <select name="dayType" defaultValue="NORMAL" className="rounded border border-neutral-300 px-2 py-1.5">
+            <option value="NORMAL">Normal</option>
+            <option value="WEEKEND">Weekend</option>
+            <option value="PEAK">Peak / festive</option>
+          </select>
         </label>
         <button className="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy-light">
           New run

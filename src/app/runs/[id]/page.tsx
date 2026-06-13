@@ -12,6 +12,7 @@ import FinalizeButton from "./FinalizeButton";
 import UnmappedPanel from "./UnmappedPanel";
 import PhaseControls from "./PhaseControls";
 import RemoveItemButton from "./RemoveItemButton";
+import DayTypeControl from "./DayTypeControl";
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -108,6 +109,13 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           </h1>
         </div>
         <div className="flex items-center gap-3">
+          <DayTypeControl
+            runId={id}
+            dayType={run.dayType}
+            weekendPct={Number(settings.weekend_buffer_pct) || 0}
+            peakPct={Number(settings.peak_buffer_pct) || 0}
+            isFinal={isFinal}
+          />
           <span
             className={
               isFinal

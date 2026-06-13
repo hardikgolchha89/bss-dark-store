@@ -10,7 +10,9 @@ export type SettingKey =
   | "sheets_sync_enabled"
   | "erpnext_source_warehouse"
   | "sheets_spreadsheet_id"
-  | "sheets_tab_name";
+  | "sheets_tab_name"
+  | "weekend_buffer_pct"
+  | "peak_buffer_pct";
 
 export type SettingType = "bool" | "string";
 
@@ -49,6 +51,22 @@ export const SETTING_DEFS: SettingDef[] = [
     default: "false",
     group: "Exports",
     help: "Off until Rebel SKU codes are mapped.",
+  },
+  {
+    key: "weekend_buffer_pct",
+    label: "Weekend buffer %",
+    type: "string",
+    default: "25",
+    group: "Run",
+    help: "Uplift added to every par when a run's day type is Weekend (e.g. 25 = +25%).",
+  },
+  {
+    key: "peak_buffer_pct",
+    label: "Peak / festive buffer %",
+    type: "string",
+    default: "50",
+    group: "Run",
+    help: "Uplift added to every par when a run's day type is Peak.",
   },
   {
     key: "block_finalize_on_unmapped",
