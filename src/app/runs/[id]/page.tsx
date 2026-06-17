@@ -269,17 +269,23 @@ function ProcurementPanel({
       <div>
         <h2 className="text-sm font-semibold text-indigo-900">Procurement — Material Requests</h2>
         <p className="text-xs text-indigo-700">
-          Consolidated requirement: <strong>{procurement.itemCount}</strong> items ·{" "}
-          {procurement.totalUnits.toLocaleString()} units. Each file below is the full list with that team&apos;s
-          warehouse as Source Warehouse — open it and delete the rows that aren&apos;t yours, then raise the Material
-          Request in ERP.
+          Total requirement <strong>{procurement.itemCount}</strong> items · {procurement.totalUnits.toLocaleString()}{" "}
+          units, split by each item&apos;s <strong>fulfillment location</strong>. Each file holds only that team&apos;s
+          items — raise it as a Material Request in ERP.
         </p>
       </div>
 
-      {procurement.itemsMissingErpCode > 0 && (
+      {procurement.unassignedCount > 0 && (
         <div className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
-          {procurement.itemsMissingErpCode} item(s) have no ERPNext item code yet — they&apos;ll have a blank item_code
-          column. Add codes in <a className="underline" href="/items">Items</a>.
+          <strong>{procurement.unassignedCount} item(s)</strong> ({procurement.unassignedUnits.toLocaleString()} units)
+          have no fulfillment location set, so they aren&apos;t on any Material Request. Assign them in{" "}
+          <a className="underline" href="/items">Items → Fulfillment</a>.
+        </div>
+      )}
+      {procurement.itemsMissingErpCode > 0 && (
+        <div className="rounded border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-700">
+          {procurement.itemsMissingErpCode} item(s) have no ERPNext item code yet (blank item_code column). Add codes in{" "}
+          <a className="underline" href="/items">Items</a>.
         </div>
       )}
 
@@ -288,11 +294,18 @@ function ProcurementPanel({
           <div key={s.id} className="rounded-lg border border-neutral-200 bg-white p-3">
             <h3 className="text-sm font-semibold">{s.name}</h3>
             <div className="mt-1 text-[11px] text-neutral-400">{s.erpnextWarehouseId ?? "no warehouse set"}</div>
+            <div className="mt-2 text-xs text-neutral-600">
+              {s.itemCount} items · {s.units.toLocaleString()} units
+            </div>
             <a
               href={`/api/runs/${runId}/export?type=mr&source=${s.id}`}
-              className="mt-3 inline-block rounded border border-indigo-300 bg-white px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+              className={`mt-2 inline-block rounded border px-2 py-1 text-xs font-medium ${
+                s.itemCount
+                  ? "border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-50"
+                  : "pointer-events-none border-neutral-200 text-neutral-300"
+              }`}
             >
-              ↓ Material Request ({procurement.itemCount} items)
+              ↓ Material Request
             </a>
           </div>
         ))}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { updateItem } from "./actions";
+import { setItemFulfillment, updateItem } from "./actions";
 
 interface Item {
   id: string;
@@ -10,9 +10,18 @@ interface Item {
   hkSku: string;
   mrp: number | null;
   erpnextCode: string | null;
+  fulfillmentSourceId: string | null;
 }
 
-export default function ItemsTable({ items, canEdit }: { items: Item[]; canEdit: boolean }) {
+export default function ItemsTable({
+  items,
+  sources,
+  canEdit,
+}: {
+  items: Item[];
+  sources: { id: string; name: string }[];
+  canEdit: boolean;
+}) {
   const [q, setQ] = useState("");
   const [, start] = useTransition();
 
@@ -45,6 +54,7 @@ export default function ItemsTable({ items, canEdit }: { items: Item[]; canEdit:
               <th className="px-3 py-2 font-medium">Category</th>
               <th className="px-3 py-2 font-medium">MRP</th>
               <th className="px-3 py-2 font-medium">ERPNext code</th>
+              <th className="px-3 py-2 font-medium">Fulfillment location</th>
             </tr>
           </thead>
           <tbody>
@@ -78,11 +88,28 @@ export default function ItemsTable({ items, canEdit }: { items: Item[]; canEdit:
                     className="w-40 rounded border border-neutral-300 px-2 py-1 disabled:bg-neutral-100"
                   />
                 </td>
+                <td className="px-3 py-1.5">
+                  <select
+                    defaultValue={i.fulfillmentSourceId ?? ""}
+                    disabled={!canEdit}
+                    onChange={(e) => start(() => setItemFulfillment(i.id, e.target.value))}
+                    className={`rounded border px-2 py-1 text-sm disabled:bg-neutral-100 ${
+                      i.fulfillmentSourceId ? "border-neutral-300" : "border-amber-300 bg-amber-50"
+                    }`}
+                  >
+                    <option value="">— unassigned —</option>
+                    {sources.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={6} className="px-3 py-6 text-center text-neutral-400">
                   No matches.
                 </td>
               </tr>

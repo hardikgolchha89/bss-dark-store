@@ -6,12 +6,13 @@ import ItemsTable from "./ItemsTable";
 import ErpCodeUpload from "./ErpCodeUpload";
 
 export default async function ItemsPage() {
-  const [items, canEdit] = await Promise.all([
+  const [items, canEdit, sources] = await Promise.all([
     prisma.item.findMany({
       orderBy: { name: "asc" },
       include: { partnerSkus: { where: { partner: Partner.HK } } },
     }),
     isAdmin(),
+    prisma.materialSource.findMany({ orderBy: { sortOrder: "asc" } }),
   ]);
 
   return (
@@ -26,6 +27,7 @@ export default async function ItemsPage() {
       {canEdit && <ErpCodeUpload />}
       <ItemsTable
         canEdit={canEdit}
+        sources={sources.map((s) => ({ id: s.id, name: s.name }))}
         items={items.map((i) => ({
           id: i.id,
           name: i.name,
@@ -33,6 +35,7 @@ export default async function ItemsPage() {
           hkSku: i.partnerSkus[0]?.skuCode ?? "",
           mrp: i.mrp,
           erpnextCode: i.erpnextCode,
+          fulfillmentSourceId: i.fulfillmentSourceId,
         }))}
       />
     </div>

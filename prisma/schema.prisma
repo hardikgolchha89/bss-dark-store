@@ -66,9 +66,11 @@ model Item {
   unit        String   @default("pcs")
   erpnextCode String?  @map("erpnext_code") // ERPNext item_code, filled over time
   active      Boolean  @default(true)
+  fulfillmentSourceId String? @map("fulfillment_source_id") // which of the 3 places fulfills this item
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  fulfillmentSource MaterialSource? @relation("ItemFulfillment", fields: [fulfillmentSourceId], references: [id])
   partnerSkus  ItemPartnerSku[]
   parTemplates ParTemplate[]
   parOverrides ParOverride[]
@@ -261,7 +263,8 @@ model MaterialSource {
   erpnextWarehouseId String?  @map("erpnext_warehouse_id")
   sortOrder          Int      @default(0) @map("sort_order")
 
-  categories CategorySource[]
+  categories     CategorySource[]
+  fulfilledItems Item[]           @relation("ItemFulfillment")
 
   @@map("material_source")
 }

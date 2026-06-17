@@ -4,14 +4,12 @@ import { prisma } from "./prisma";
 import { resolvePar, suggestedQty } from "./requirement";
 import {
   buildConsolidatedRows,
-  buildErpRows,
   buildPORows,
-  toCsvString,
   toXlsxBuffer,
   type ConsolidatedLine,
-  type ErpLine,
   type POLine,
 } from "./exports";
+import { buildSteCsv, type SteLine } from "./ste";
 import { asBool, defaultsByKey } from "./settings";
 
 // ---- settings -------------------------------------------------------------
@@ -296,12 +294,12 @@ export async function buildErpExport(runId: string): Promise<ExportFile> {
     orderBy: [{ store: { sortOrder: "asc" } }, { item: { name: "asc" } }],
   });
 
-  const lines: ErpLine[] = [];
+  const lines: SteLine[] = [];
   for (const r of reqs) {
     if (!r.store.erpnextWarehouseId || !r.item.erpnextCode) continue;
-    lines.push({ tWarehouse: r.store.erpnextWarehouseId, itemCode: r.item.erpnextCode, qty: r.adjusted });
+    lines.push({ tWarehouse: r.store.erpnextWarehouseId, itemCode: r.item.erpnextCode, itemName: r.item.name, qty: r.adjusted });
   }
-  const csv = toCsvString(buildErpRows(lines, source));
+  const csv = buildSteCsv(lines, source);
   return {
     filename: `ERPNext_StockEntry_${dateTag(run.runDate)}.csv`,
     buffer: Buffer.from(csv, "utf-8"),
@@ -362,11 +360,11 @@ export async function buildErpZip(runId: string): Promise<ExportFile> {
     orderBy: [{ store: { sortOrder: "asc" } }, { item: { name: "asc" } }],
   });
 
-  const byStore = new Map<string, { name: string; lines: ErpLine[] }>();
+  const byStore = new Map<string, { name: string; lines: SteLine[] }>();
   for (const r of reqs) {
     if (!r.store.erpnextWarehouseId || !r.item.erpnextCode) continue;
     const g = byStore.get(r.storeId) ?? { name: r.store.name, lines: [] };
-    g.lines.push({ tWarehouse: r.store.erpnextWarehouseId, itemCode: r.item.erpnextCode, qty: r.adjusted });
+    g.lines.push({ tWarehouse: r.store.erpnextWarehouseId, itemCode: r.item.erpnextCode, itemName: r.item.name, qty: r.adjusted });
     byStore.set(r.storeId, g);
   }
 
@@ -374,7 +372,7 @@ export async function buildErpZip(runId: string): Promise<ExportFile> {
   const zip = new JSZip();
   for (const { name, lines } of byStore.values()) {
     if (!lines.length) continue;
-    zip.file(`ERP_${safeName(name)}.csv`, toCsvString(buildErpRows(lines, source)));
+    zip.file(`ERP_${safeName(name)}.csv`, buildSteCsv(lines, source));
   }
   const buffer = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer;
   return {

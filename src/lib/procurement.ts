@@ -14,6 +14,7 @@ export interface ConsolidatedLine {
   name: string;
   category: string;
   erpnextCode: string | null;
+  fulfillmentSourceId: string | null;
   total: number; // Σ adjusted across all stores
 }
 
@@ -31,6 +32,7 @@ export async function buildConsolidated(runId: string): Promise<ConsolidatedLine
       name: r.item.name,
       category: r.item.category ?? "",
       erpnextCode: r.item.erpnextCode,
+      fulfillmentSourceId: r.item.fulfillmentSourceId,
       total: 0,
     };
     g.total += r.adjusted;
@@ -40,7 +42,9 @@ export async function buildConsolidated(runId: string): Promise<ConsolidatedLine
 }
 
 export interface ProcurementSummary {
-  sources: { id: string; name: string; erpnextWarehouseId: string | null }[];
+  sources: { id: string; name: string; erpnextWarehouseId: string | null; itemCount: number; units: number }[];
+  unassignedCount: number;
+  unassignedUnits: number;
   itemCount: number;
   totalUnits: number;
   itemsMissingErpCode: number;
@@ -51,8 +55,30 @@ export async function getProcurementSummary(runId: string): Promise<ProcurementS
     buildConsolidated(runId),
     prisma.materialSource.findMany({ orderBy: { sortOrder: "asc" } }),
   ]);
+  const bySource = new Map<string, { items: number; units: number }>();
+  let unassignedCount = 0;
+  let unassignedUnits = 0;
+  for (const l of consolidated) {
+    if (l.fulfillmentSourceId) {
+      const g = bySource.get(l.fulfillmentSourceId) ?? { items: 0, units: 0 };
+      g.items += 1;
+      g.units += l.total;
+      bySource.set(l.fulfillmentSourceId, g);
+    } else {
+      unassignedCount += 1;
+      unassignedUnits += l.total;
+    }
+  }
   return {
-    sources: sources.map((s) => ({ id: s.id, name: s.name, erpnextWarehouseId: s.erpnextWarehouseId })),
+    sources: sources.map((s) => ({
+      id: s.id,
+      name: s.name,
+      erpnextWarehouseId: s.erpnextWarehouseId,
+      itemCount: bySource.get(s.id)?.items ?? 0,
+      units: bySource.get(s.id)?.units ?? 0,
+    })),
+    unassignedCount,
+    unassignedUnits,
     itemCount: consolidated.length,
     totalUnits: consolidated.reduce((a, l) => a + l.total, 0),
     itemsMissingErpCode: consolidated.filter((l) => !l.erpnextCode).length,
@@ -74,7 +100,8 @@ export async function buildMaterialRequestExport(
 ): Promise<ExportFile> {
   const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
   const source = await prisma.materialSource.findUniqueOrThrow({ where: { id: sourceId } });
-  const lines = await buildConsolidated(runId);
+  // only items whose fulfillment location is this source
+  const lines = (await buildConsolidated(runId)).filter((l) => l.fulfillmentSourceId === sourceId);
   const schedule = ddmmyyyy(run.runDate);
 
   const rows: string[][] = MR_PREAMBLE.map((r) => [...r]);

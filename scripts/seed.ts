@@ -165,14 +165,16 @@ async function seedStores() {
 // --- 3b. material sources (the 3 procurement places) ------------------------
 
 const MATERIAL_SOURCES = [
-  { name: "Byculla Mithai Packing", erpnextWarehouseId: "Byculla Mithai Packing (Ops) - HIHPL", sortOrder: 0 },
-  { name: "Andheri Packaging Warehouse", erpnextWarehouseId: "Andheri Packaging Warehouse - HIHPL", sortOrder: 1 },
-  { name: "Andheri Retail Warehouse", erpnextWarehouseId: "Andheri Retail Warehouse - HIHPL", sortOrder: 2 },
+  { name: "Byculla Mithai Ops", erpnextWarehouseId: "Byculla Mithai Packing (Ops) - HIHPL", sortOrder: 0 },
+  { name: "Andheri PKG", erpnextWarehouseId: "Andheri Packaging Warehouse - HIHPL", sortOrder: 1 },
+  { name: "Andheri Retail", erpnextWarehouseId: "Andheri Retail Warehouse - HIHPL", sortOrder: 2 },
 ];
 
 async function seedMaterialSources() {
   for (const s of MATERIAL_SOURCES) {
-    const existing = await prisma.materialSource.findFirst({ where: { name: s.name } });
+    const existing = await prisma.materialSource.findFirst({
+      where: { erpnextWarehouseId: s.erpnextWarehouseId },
+    });
     if (existing) {
       await prisma.materialSource.update({ where: { id: existing.id }, data: s });
     } else {

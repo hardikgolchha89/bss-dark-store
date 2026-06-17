@@ -33,10 +33,24 @@ const parseBool = (v: unknown) => {
 };
 
 // ---------------- Items ----------------
-const ITEM_HEADER = ["HK SKU", "Name", "Category", "MRP", "ERPNext Code", "CZ SKU", "Rebel SKU", "Active"];
+const ITEM_HEADER = [
+  "HK SKU",
+  "Name",
+  "Category",
+  "MRP",
+  "ERPNext Code",
+  "CZ SKU",
+  "Rebel SKU",
+  "Active",
+  "Fulfillment Location",
+];
 
 async function pushItems(): Promise<PushResult> {
-  const items = await prisma.item.findMany({ orderBy: { name: "asc" }, include: { partnerSkus: true } });
+  const [items, sources] = await Promise.all([
+    prisma.item.findMany({ orderBy: { name: "asc" }, include: { partnerSkus: true } }),
+    prisma.materialSource.findMany(),
+  ]);
+  const srcName = new Map(sources.map((s) => [s.id, s.name]));
   const rows: (string | number)[][] = [ITEM_HEADER];
   for (const it of items) {
     const sku = (p: Partner) => it.partnerSkus.find((s) => s.partner === p)?.skuCode ?? "";
@@ -49,6 +63,7 @@ async function pushItems(): Promise<PushResult> {
       sku(Partner.CZ),
       sku(Partner.REBEL),
       bool(it.active),
+      it.fulfillmentSourceId ? (srcName.get(it.fulfillmentSourceId) ?? "") : "",
     ]);
   }
   await writeTab("Items", rows);
@@ -62,18 +77,26 @@ async function pullItems(mirror: boolean): Promise<PullResult> {
     res.warnings.push("Items tab is empty — skipped.");
     return res;
   }
+  // fulfillment location: match the sheet's source name (case-insensitive) to a source id
+  const sources = await prisma.materialSource.findMany();
+  const srcByName = new Map(sources.map((s) => [s.name.trim().toLowerCase(), s.id]));
+
   const seenHk = new Set<string>();
   for (let i = 1; i < aoa.length; i++) {
     const r = aoa[i];
     const hk = canonicalSku(r[0]);
     if (!hk) { res.skipped++; continue; }
     seenHk.add(hk);
+    const fulfilRaw = String(r[8] ?? "").trim().toLowerCase();
+    const fulfillmentSourceId =
+      fulfilRaw && fulfilRaw !== "unassigned" ? srcByName.get(fulfilRaw) ?? null : null;
     const data = {
       name: String(r[1] ?? "").trim() || `SKU ${hk}`,
       category: String(r[2] ?? "").trim() || null,
       mrp: r[3] !== undefined && String(r[3]).trim() !== "" ? Number(r[3]) : null,
       erpnextCode: String(r[4] ?? "").trim() || null,
       active: r[7] !== undefined ? parseBool(r[7]) : true,
+      fulfillmentSourceId,
     };
     const existing = await prisma.itemPartnerSku.findUnique({
       where: { partner_skuCode: { partner: Partner.HK, skuCode: hk } },

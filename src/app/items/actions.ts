@@ -18,3 +18,13 @@ export async function updateItem(
   });
   revalidatePath("/items");
 }
+
+// Assign an item's fulfillment location (one of the 3 source places, or none).
+export async function setItemFulfillment(itemId: string, sourceId: string) {
+  if (!(await isAdmin())) throw new Error("Admins only");
+  await prisma.item.update({
+    where: { id: itemId },
+    data: { fulfillmentSourceId: sourceId || null },
+  });
+  revalidatePath("/items");
+}
