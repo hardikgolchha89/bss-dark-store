@@ -159,6 +159,21 @@ async function seedStores() {
     });
     created++;
   }
+
+  // Powai/Vikhroli are the same store under two names (we say Vikhroli, Prime
+  // says Powai). Give it both aliases + a combined display name so either upload
+  // auto-detects it.
+  const pv = await prisma.store.findFirst({
+    where: { OR: [{ name: { contains: "Powai", mode: "insensitive" } }, { name: { contains: "Vikhroli", mode: "insensitive" } }] },
+  });
+  if (pv) {
+    const aliases = new Set([...pv.locationAliases, "Powai", "Vikhroli"]);
+    await prisma.store.update({
+      where: { id: pv.id },
+      data: { name: "Powai Vikhroli", locationAliases: [...aliases] },
+    });
+    console.log(`  stores: normalized "${pv.name}" -> "Powai Vikhroli" (+Powai/Vikhroli aliases)`);
+  }
   console.log(`  stores: ${created} dark-store warehouses (HK/CZ/Rebel)`);
 }
 

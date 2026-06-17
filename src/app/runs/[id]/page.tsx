@@ -3,11 +3,11 @@ import { notFound } from "next/navigation";
 import { Partner } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/current-user";
-import { getSettingsMap } from "@/lib/run-engine";
+import { ensureManualStores, getSettingsMap } from "@/lib/run-engine";
 import { getProcurementSummary } from "@/lib/procurement";
 import { asBool } from "@/lib/settings";
 import UploadPanel from "./UploadPanel";
-import RequirementGrid from "./RequirementGrid";
+import RequirementMatrix from "./RequirementMatrix";
 import FinalizeButton from "./FinalizeButton";
 import UnmappedPanel from "./UnmappedPanel";
 import PhaseControls from "./PhaseControls";
@@ -19,12 +19,15 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const run = await prisma.run.findUnique({ where: { id } });
   if (!run) notFound();
 
+  // CZ/Rebel stores have no live feed — seed them at live=0 (suggested=par).
+  await ensureManualStores(id);
+
   const [stores, reqs, unmapped, items, settings] = await Promise.all([
     prisma.store.findMany({ where: { active: true }, orderBy: [{ partner: "asc" }, { sortOrder: "asc" }] }),
     prisma.runRequirement.findMany({
       where: { runId: id, removed: false },
       include: {
-        item: { include: { partnerSkus: { where: { partner: Partner.HK } } } },
+        item: { include: { partnerSkus: { where: { partner: Partner.HK } }, fulfillmentSource: true } },
         store: true,
       },
       orderBy: [{ store: { sortOrder: "asc" } }, { item: { name: "asc" } }],
@@ -69,14 +72,23 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
     id: r.id,
     storeId: r.storeId,
     storeName: r.store.name,
+    itemId: r.itemId,
     itemName: r.item.name,
     category: r.item.category ?? "",
+    source: r.item.fulfillmentSource?.name ?? "",
     par: r.parUsed,
     live: r.liveUsed,
     suggested: r.suggested,
     adjusted: r.adjusted,
     updatedAt: r.updatedAt.toISOString(),
   }));
+
+  // store columns for the matrix: only stores that actually have lines, in
+  // partner+sortOrder order (matches the `stores` query).
+  const storesWithLines = new Set(gridRows.map((r) => r.storeId));
+  const matrixStores = stores
+    .filter((s) => storesWithLines.has(s.id))
+    .map((s) => ({ id: s.id, name: s.name, partner: String(s.partner) }));
 
   // Order preview: consolidated by item, mapped lines only (what's actually pushed).
   const orderMap = new Map<string, { itemId: string; sku: string; name: string; category: string; total: number; stores: number }>();
@@ -187,7 +199,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         />
       )}
 
-      <RequirementGrid runId={id} rows={gridRows} isFinal={isFinal} />
+      <RequirementMatrix runId={id} rows={gridRows} stores={matrixStores} isFinal={isFinal} />
 
       <OrderPreview runId={id} lines={orderLines} lineCount={orderLineCount} isFinal={isFinal} />
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { setItemFulfillment, updateItem } from "./actions";
+import { createItem, setItemFulfillment, updateItem } from "./actions";
 
 interface Item {
   id: string;
@@ -39,12 +39,15 @@ export default function ItemsTable({
 
   return (
     <div className="space-y-3">
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search name, SKU, category, ERPNext code…"
-        className="w-full max-w-md rounded border border-neutral-300 px-3 py-2 text-sm"
-      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search name, SKU, category, ERPNext code…"
+          className="w-full max-w-md rounded border border-neutral-300 px-3 py-2 text-sm"
+        />
+        {canEdit && <AddItem sources={sources} />}
+      </div>
       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-neutral-100 text-left text-neutral-500">
@@ -118,5 +121,115 @@ export default function ItemsTable({
         </table>
       </div>
     </div>
+  );
+}
+
+function AddItem({ sources }: { sources: { id: string; name: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    setErr(null);
+    start(async () => {
+      const res = await createItem({
+        name: String(fd.get("name") ?? ""),
+        category: String(fd.get("category") ?? ""),
+        hkSku: String(fd.get("hkSku") ?? ""),
+        mrp: fd.get("mrp") ? Number(fd.get("mrp")) : null,
+        erpnextCode: String(fd.get("erpnextCode") ?? ""),
+        fulfillmentSourceId: String(fd.get("fulfillmentSourceId") ?? "") || null,
+      });
+      if (res.ok) {
+        form.reset();
+        setOpen(false);
+      } else {
+        setErr(res.message ?? "Could not add item.");
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="rounded bg-navy px-3 py-2 text-sm font-medium text-white hover:bg-navy-light"
+      >
+        + Add item
+      </button>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="flex w-full flex-wrap items-end gap-2 rounded-lg border border-neutral-200 bg-cream-deep/40 p-3"
+    >
+      <Field label="HK SKU *" name="hkSku" placeholder="16223" required width="w-28" />
+      <Field label="Name *" name="name" placeholder="Item name" required width="w-56" />
+      <Field label="Category" name="category" placeholder="e.g. Mithai" width="w-36" />
+      <Field label="MRP" name="mrp" type="number" placeholder="0.00" width="w-24" />
+      <Field label="ERPNext code" name="erpnextCode" placeholder="—" width="w-36" />
+      <label className="text-xs">
+        <span className="mb-1 block text-neutral-500">Fulfillment</span>
+        <select name="fulfillmentSourceId" defaultValue="" className="rounded border border-neutral-300 px-2 py-1.5 text-sm">
+          <option value="">— unassigned —</option>
+          {sources.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex items-center gap-2">
+        <button
+          disabled={pending}
+          className="rounded bg-navy px-3 py-2 text-sm font-medium text-white hover:bg-navy-light disabled:opacity-50"
+        >
+          {pending ? "Adding…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setErr(null); }}
+          className="rounded border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50"
+        >
+          Cancel
+        </button>
+      </div>
+      {err && <p className="w-full text-xs text-red-600">{err}</p>}
+    </form>
+  );
+}
+
+function Field({
+  label,
+  name,
+  placeholder,
+  type = "text",
+  required = false,
+  width = "w-40",
+}: {
+  label: string;
+  name: string;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+  width?: string;
+}) {
+  return (
+    <label className="text-xs">
+      <span className="mb-1 block text-neutral-500">{label}</span>
+      <input
+        name={name}
+        type={type}
+        step={type === "number" ? "0.01" : undefined}
+        placeholder={placeholder}
+        required={required}
+        className={`${width} rounded border border-neutral-300 px-2 py-1.5 text-sm`}
+      />
+    </label>
   );
 }

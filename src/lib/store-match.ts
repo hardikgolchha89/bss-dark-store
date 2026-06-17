@@ -1,13 +1,24 @@
+// Locality synonyms: names we use vs. what Prime/ERPNext call the same place.
+// The first token is canonical; every other token folds into it before matching,
+// so "Powai" (Prime) and "Vikhroli" (our name) resolve to the same store.
+const STORE_SYNONYMS: string[][] = [["powai", "vikhroli"]];
+
 // Shared store-matching logic (used by the seed and by Prime CSV uploads).
 // Distinctive token: drop partner prefixes/qualifiers, punctuation, spaces.
 //   "HK - Goregaon East" -> "goregaoneast"
 export function storeKey(label: string): string {
-  return label
+  let key = label
     .toLowerCase()
     .replace(/\bhihpl\b/g, "")
     .replace(/\b(hk|cz|rebel|cfi|foh|ops|warehouse|outlet)\b/g, "")
     .replace(/bombay sweet shop inventory/g, "")
     .replace(/[^a-z0-9]/g, "");
+  // fold each synonym group down to its canonical token
+  for (const group of STORE_SYNONYMS) {
+    const [canon, ...rest] = group;
+    for (const term of rest) key = key.split(term).join(canon);
+  }
+  return key;
 }
 
 export interface MatchableStore {

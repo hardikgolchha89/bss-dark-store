@@ -97,6 +97,31 @@ export async function recomputeStore(
   await prisma.$transaction(ops);
 }
 
+// Non-HK partners (CZ / Rebel) have no live stock feed. We assume their live
+// stock is 0 so suggested = par, and the user fulfills by editing adjusted.
+// Idempotent: only seeds a store that has no requirement lines in this run yet,
+// so it never clobbers edits or re-adds removed lines.
+export async function ensureManualStores(runId: string): Promise<void> {
+  const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
+  if (run.status === RunStatus.FINALIZED) return;
+
+  const stores = await prisma.store.findMany({
+    where: { active: true, partner: { not: Partner.HK } },
+  });
+  if (stores.length === 0) return;
+
+  const seeded = await prisma.runRequirement.groupBy({
+    by: ["storeId"],
+    where: { runId },
+  });
+  const haveLines = new Set(seeded.map((s) => s.storeId));
+  const todo = stores.filter((s) => !haveLines.has(s.id));
+  if (todo.length === 0) return;
+
+  const pct = await getRunBufferPct(runId);
+  for (const s of todo) await recomputeStore(runId, s.id, pct);
+}
+
 export async function recomputeAll(runId: string): Promise<void> {
   const pct = await getRunBufferPct(runId);
   const storeIds = await prisma.runStock.findMany({
