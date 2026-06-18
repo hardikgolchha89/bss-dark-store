@@ -5,9 +5,12 @@ import { resolvePar, suggestedQty } from "./requirement";
 import {
   buildConsolidatedRows,
   buildPORows,
+  buildRebelPoRows,
+  toCsvString,
   toXlsxBuffer,
   type ConsolidatedLine,
   type POLine,
+  type RebelPoLine,
 } from "./exports";
 import { buildSteCsv, type SteLine } from "./ste";
 import { asBool, defaultsByKey } from "./settings";
@@ -263,6 +266,14 @@ function dateTag(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// dd/mm/yy — the date format Rebel's working sheet uses (e.g. 17/06/26).
+function ddmmyy(d: Date): string {
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yy = String(d.getUTCFullYear()).slice(2);
+  return `${dd}/${mm}/${yy}`;
+}
+
 function safeName(s: string): string {
   return s.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
 }
@@ -367,6 +378,52 @@ export async function buildPrimePoZip(runId: string): Promise<ExportFile> {
   const buffer = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer;
   return {
     filename: `PrimePOs_${dateTag(run.runDate)}.zip`,
+    buffer,
+    contentType: "application/zip",
+  };
+}
+
+// Rebel POs as a ZIP of one "BSS Ordering Working Sheet" CSV per Rebel store.
+// `invoice` is the ERP stock-entry number the user supplies at download time
+// (Rebel isn't connected to ERP) and is stamped on every row.
+export async function buildRebelPoZip(runId: string, invoice: string): Promise<ExportFile> {
+  await assertDistribution(runId);
+  const inv = invoice.trim();
+  if (!inv) throw new Error("A stock-entry / invoice number is required for Rebel POs.");
+  const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
+  const date = ddmmyy(run.runDate);
+
+  const reqs = await prisma.runRequirement.findMany({
+    where: { runId, store: { partner: Partner.REBEL }, adjusted: { gt: 0 }, removed: false },
+    include: { store: true, item: { include: { partnerSkus: { where: { partner: Partner.REBEL } } } } },
+    orderBy: [{ store: { sortOrder: "asc" } }, { item: { name: "asc" } }],
+  });
+
+  const byStore = new Map<string, { name: string; lines: RebelPoLine[] }>();
+  for (const r of reqs) {
+    const psku = r.item.partnerSkus[0];
+    if (!psku) continue; // no Rebel SKU -> can't order from Rebel (flagged in Items)
+    const g = byStore.get(r.storeId) ?? { name: r.store.name, lines: [] };
+    g.lines.push({
+      kitchenCode: r.store.code ?? "",
+      storeName: r.store.name,
+      invCode: psku.skuCode,
+      productName: psku.productName ?? r.item.name,
+      qty: r.adjusted,
+    });
+    byStore.set(r.storeId, g);
+  }
+
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+  for (const { name, lines } of byStore.values()) {
+    if (!lines.length) continue;
+    const rows = buildRebelPoRows(lines, { invoice: inv, dispatchDate: date, deliveryDate: date });
+    zip.file(`Rebel_PO_${safeName(name)}.csv`, toCsvString(rows));
+  }
+  const buffer = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer;
+  return {
+    filename: `Rebel_POs_${dateTag(run.runDate)}.zip`,
     buffer,
     contentType: "application/zip",
   };

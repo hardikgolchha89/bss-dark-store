@@ -21,6 +21,8 @@ const prisma = new PrismaClient();
 const DATA = path.join(process.cwd(), "data");
 const WB = path.join(DATA, "Hyperkytchens CakeZone Product Availability.xlsx");
 const WAREHOUSES = path.join(DATA, "Warehouse Data Export (1).csv");
+const REBEL_PRODUCTS = path.join(DATA, "Rebel BSS Ordering Product Details.csv");
+const REBEL_STORE_CODES = path.join(DATA, "REBEL BSS Ordering Store Codes.csv");
 
 // --- helpers ---------------------------------------------------------------
 
@@ -37,6 +39,23 @@ function readSheet(file: string, sheet: string): unknown[][] {
   const ws = wb.Sheets[sheet];
   if (!ws) throw new Error(`sheet "${sheet}" not found in ${path.basename(file)}`);
   return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+}
+
+// Read the first (only) sheet of a CSV file as an array of rows.
+function readCsv(file: string): unknown[][] {
+  const wb = XLSX.readFile(file);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+}
+
+// Normalize a product name for cross-catalog matching: drop the "SLM"/"BSS"
+// suffixes, punctuation and spaces. "Aamras Passion Fruit Lassi - BSS" and
+// "Aamras Passion Fruit Lassi SLM BSS" both -> "aamraspassionfruitlassi".
+function productKey(name: string): string {
+  return String(name ?? "")
+    .toLowerCase()
+    .replace(/\b(slm|bss)\b/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 // Distinctive token for fuzzy store matching: drop partner prefixes, qualifiers,
@@ -237,6 +256,75 @@ async function seedItems() {
   console.log(`  items: ${count} HK items ensured`);
 }
 
+// --- 4b. rebel catalog: inventory code (rebel sku) + rebel product name -----
+// Match the Rebel "Product Details" sheet to our items by normalized name and
+// attach a REBEL ItemPartnerSku (skuCode = Inventory Code, productName = Rebel's
+// Inventory Name). Unmatched rows are logged for manual entry via the tool.
+
+async function seedRebelCatalog() {
+  const rows = readCsv(REBEL_PRODUCTS);
+  // header: Product Code | Product Name | Inventory Name | Inventory Code | UOM | ...
+  const header = (rows[0] ?? []).map((c) => String(c ?? "").trim().toLowerCase());
+  const invNameIdx = header.indexOf("inventory name");
+  const invCodeIdx = header.indexOf("inventory code");
+  if (invNameIdx < 0 || invCodeIdx < 0) {
+    console.log("  ! rebel catalog: missing Inventory Name/Code columns, skipped");
+    return;
+  }
+
+  const items = await prisma.item.findMany({ select: { id: true, name: true } });
+  const byKey = new Map<string, string>(); // productKey -> itemId (first wins)
+  for (const it of items) {
+    const k = productKey(it.name);
+    if (k && !byKey.has(k)) byKey.set(k, it.id);
+  }
+
+  let matched = 0;
+  const unmatched: string[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const invName = String(rows[i]?.[invNameIdx] ?? "").trim();
+    const invCode = String(rows[i]?.[invCodeIdx] ?? "").trim();
+    if (!invCode || !invName) continue;
+    const itemId = byKey.get(productKey(invName));
+    if (!itemId) {
+      unmatched.push(invName);
+      continue;
+    }
+    await prisma.itemPartnerSku.upsert({
+      where: { itemId_partner: { itemId, partner: Partner.REBEL } },
+      update: { skuCode: invCode, productName: invName },
+      create: { itemId, partner: Partner.REBEL, skuCode: invCode, productName: invName },
+    });
+    matched++;
+  }
+  console.log(`  rebel catalog: ${matched} items mapped to a Rebel SKU` + (unmatched.length ? `, ${unmatched.length} unmatched` : ""));
+  if (unmatched.length) console.log(`    unmatched (add Rebel SKU manually): ${unmatched.slice(0, 12).join(" | ")}${unmatched.length > 12 ? " …" : ""}`);
+}
+
+// --- 4c. rebel store/kitchen codes -----------------------------------------
+
+async function seedRebelStoreCodes() {
+  const rows = readCsv(REBEL_STORE_CODES);
+  // header: STORE NAME | STORE CODE
+  const stores = await prisma.store.findMany({ where: { partner: Partner.REBEL } });
+  const keys = stores.map((s) => ({ id: s.id, key: storeKey(s.name) }));
+  let set = 0;
+  const misses: string[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const name = String(rows[i]?.[0] ?? "").trim();
+    const code = String(rows[i]?.[1] ?? "").trim();
+    if (!name || !code) continue;
+    const id = matchStore(name, keys);
+    if (!id) {
+      misses.push(name);
+      continue;
+    }
+    await prisma.store.update({ where: { id }, data: { code } });
+    set++;
+  }
+  console.log(`  rebel store codes: ${set} set` + (misses.length ? `, no match for: ${misses.join(", ")}` : ""));
+}
+
 // --- 5. pars: derive tiers, templates, overrides ---------------------------
 
 async function seedPars() {
@@ -369,6 +457,8 @@ async function main() {
   await seedStores();
   await seedMaterialSources();
   await seedItems();
+  await seedRebelCatalog();
+  await seedRebelStoreCodes();
   await seedPars();
   console.log("Done.");
 }

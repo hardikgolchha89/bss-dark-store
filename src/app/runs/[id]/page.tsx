@@ -13,6 +13,7 @@ import UnmappedPanel from "./UnmappedPanel";
 import PhaseControls from "./PhaseControls";
 import RemoveItemButton from "./RemoveItemButton";
 import DayTypeControl from "./DayTypeControl";
+import RebelPoDownload from "./RebelPoDownload";
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -411,7 +412,7 @@ function ExportsBar({
               Draft — exports reflect current adjusted values; finalize to freeze the record.
             </p>
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {links.map((l) => (
               <a
                 key={l.type}
@@ -421,6 +422,7 @@ function ExportsBar({
                 ↓ {l.label}
               </a>
             ))}
+            <RebelPoDownload runId={runId} />
           </div>
         </>
       )}

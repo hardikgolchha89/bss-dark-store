@@ -29,6 +29,57 @@ export function buildPORows(lines: POLine[]): (string | number)[][] {
   return rows;
 }
 
+// ---- Rebel PO ("BSS Ordering Working Sheet" format) -----------------------
+// Rebel's own ordering sheet. Invoice_Number = the ERP stock-entry number the
+// user types at download time (Rebel isn't wired to ERP). Kitchen_Code = store
+// code; rebel_inventory_code = the item's Rebel SKU.
+export const REBEL_PO_HEADER = [
+  "Invoice_Number",
+  "Dispatch_Date",
+  "Planned_Delivery_Date",
+  "Kitchen_Code",
+  "Store_Name",
+  "rebel_inventory_code",
+  "Product_Name",
+  "batch_id",
+  "dispatch_quantity",
+  "Remark",
+] as const;
+
+export interface RebelPoLine {
+  kitchenCode: string;
+  storeName: string;
+  invCode: string; // rebel inventory code (= rebel sku)
+  productName: string;
+  qty: number;
+}
+
+export interface RebelPoMeta {
+  invoice: string;
+  dispatchDate: string; // dd/mm/yy
+  deliveryDate: string; // dd/mm/yy
+}
+
+export function buildRebelPoRows(lines: RebelPoLine[], meta: RebelPoMeta): (string | number)[][] {
+  const rows: (string | number)[][] = [[...REBEL_PO_HEADER]];
+  for (const l of lines) {
+    if (l.qty <= 0) continue;
+    rows.push([
+      meta.invoice,
+      meta.dispatchDate,
+      meta.deliveryDate,
+      l.kitchenCode,
+      l.storeName,
+      l.invCode,
+      l.productName,
+      "", // batch_id
+      l.qty,
+      "", // Remark
+    ]);
+  }
+  return rows;
+}
+
 // ---- ERPNext Stock Entry (Material Transfer) ------------------------------
 export const ERP_HEADER = [
   "barcode",

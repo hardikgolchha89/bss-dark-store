@@ -84,10 +84,11 @@ model Item {
 
 // One internal item, different SKU code per partner (same product across partners).
 model ItemPartnerSku {
-  id      String  @id @default(cuid())
-  itemId  String  @map("item_id")
-  partner Partner
-  skuCode String  @map("sku_code") // canonicalized string, e.g. "16223"
+  id          String  @id @default(cuid())
+  itemId      String  @map("item_id")
+  partner     Partner
+  skuCode     String  @map("sku_code") // canonicalized string, e.g. "16223" (HK) or "SLMBSSIJKL" (Rebel inventory code)
+  productName String? @map("product_name") // partner's own product label, used on partner POs (e.g. Rebel "Mango Ghevar SLM BSS")
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
@@ -107,6 +108,7 @@ model Store {
   partner            Partner
   tier               Tier     @default(B)
   active             Boolean  @default(true)
+  code               String?  @map("store_code") // partner kitchen/store code, e.g. Rebel "FFSMU093"
   erpnextWarehouseId String?  @unique @map("erpnext_warehouse_id") // e.g. "HK- BKC - HIHPL"
   locationAliases    String[] @map("location_aliases") // Prime CSV Location strings -> this store
   sortOrder          Int      @default(0) @map("sort_order")

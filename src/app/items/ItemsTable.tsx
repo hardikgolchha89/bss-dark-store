@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { createItem, setItemFulfillment, updateItem } from "./actions";
+import { createItem, setItemFulfillment, setItemRebelSku, updateItem } from "./actions";
 
 interface Item {
   id: string;
   name: string;
   category: string;
   hkSku: string;
+  rebelSku: string;
   mrp: number | null;
   erpnextCode: string | null;
   fulfillmentSourceId: string | null;
@@ -32,6 +33,7 @@ export default function ItemsTable({
       (i) =>
         i.name.toLowerCase().includes(t) ||
         i.hkSku.includes(t) ||
+        i.rebelSku.toLowerCase().includes(t) ||
         i.category.toLowerCase().includes(t) ||
         (i.erpnextCode ?? "").toLowerCase().includes(t),
     );
@@ -57,6 +59,7 @@ export default function ItemsTable({
               <th className="px-3 py-2 font-medium">Category</th>
               <th className="px-3 py-2 font-medium">MRP</th>
               <th className="px-3 py-2 font-medium">ERPNext code</th>
+              <th className="px-3 py-2 font-medium">Rebel SKU</th>
               <th className="px-3 py-2 font-medium">Fulfillment location</th>
             </tr>
           </thead>
@@ -92,6 +95,25 @@ export default function ItemsTable({
                   />
                 </td>
                 <td className="px-3 py-1.5">
+                  <input
+                    defaultValue={i.rebelSku}
+                    disabled={!canEdit}
+                    placeholder="—"
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (v === i.rebelSku) return;
+                      start(async () => {
+                        const r = await setItemRebelSku(i.id, v);
+                        if (!r.ok) {
+                          alert(r.message ?? "Could not save Rebel SKU");
+                          e.target.value = i.rebelSku;
+                        }
+                      });
+                    }}
+                    className="w-36 rounded border border-neutral-300 px-2 py-1 tabular-nums disabled:bg-neutral-100"
+                  />
+                </td>
+                <td className="px-3 py-1.5">
                   <select
                     defaultValue={i.fulfillmentSourceId ?? ""}
                     disabled={!canEdit}
@@ -112,7 +134,7 @@ export default function ItemsTable({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={7} className="px-3 py-6 text-center text-neutral-400">
                   No matches.
                 </td>
               </tr>
@@ -139,6 +161,7 @@ function AddItem({ sources }: { sources: { id: string; name: string }[] }) {
         name: String(fd.get("name") ?? ""),
         category: String(fd.get("category") ?? ""),
         hkSku: String(fd.get("hkSku") ?? ""),
+        rebelSku: String(fd.get("rebelSku") ?? ""),
         mrp: fd.get("mrp") ? Number(fd.get("mrp")) : null,
         erpnextCode: String(fd.get("erpnextCode") ?? ""),
         fulfillmentSourceId: String(fd.get("fulfillmentSourceId") ?? "") || null,
@@ -173,6 +196,7 @@ function AddItem({ sources }: { sources: { id: string; name: string }[] }) {
       <Field label="Category" name="category" placeholder="e.g. Mithai" width="w-36" />
       <Field label="MRP" name="mrp" type="number" placeholder="0.00" width="w-24" />
       <Field label="ERPNext code" name="erpnextCode" placeholder="—" width="w-36" />
+      <Field label="Rebel SKU" name="rebelSku" placeholder="SLMBSS…" width="w-32" />
       <label className="text-xs">
         <span className="mb-1 block text-neutral-500">Fulfillment</span>
         <select name="fulfillmentSourceId" defaultValue="" className="rounded border border-neutral-300 px-2 py-1.5 text-sm">

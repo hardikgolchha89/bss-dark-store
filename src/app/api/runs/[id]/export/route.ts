@@ -6,6 +6,7 @@ import {
   buildErpZip,
   buildPOExport,
   buildPrimePoZip,
+  buildRebelPoZip,
   type ExportFile,
 } from "@/lib/run-engine";
 import { buildMaterialRequestExport } from "@/lib/procurement";
@@ -35,6 +36,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       case "erp_zip":
         file = await buildErpZip(id);
         break;
+      case "rebel_po_zip": {
+        const invoice = req.nextUrl.searchParams.get("invoice") ?? "";
+        if (!invoice.trim()) {
+          return NextResponse.json({ error: "Missing stock-entry / invoice number" }, { status: 400 });
+        }
+        file = await buildRebelPoZip(id, invoice);
+        break;
+      }
       case "consolidated":
         file = await buildConsolidatedExport(id);
         break;

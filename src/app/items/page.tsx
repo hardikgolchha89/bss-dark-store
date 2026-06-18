@@ -9,7 +9,7 @@ export default async function ItemsPage() {
   const [items, canEdit, sources] = await Promise.all([
     prisma.item.findMany({
       orderBy: { name: "asc" },
-      include: { partnerSkus: { where: { partner: Partner.HK } } },
+      include: { partnerSkus: { where: { partner: { in: [Partner.HK, Partner.REBEL] } } } },
     }),
     isAdmin(),
     prisma.materialSource.findMany({ orderBy: { sortOrder: "asc" } }),
@@ -32,7 +32,8 @@ export default async function ItemsPage() {
           id: i.id,
           name: i.name,
           category: i.category ?? "",
-          hkSku: i.partnerSkus[0]?.skuCode ?? "",
+          hkSku: i.partnerSkus.find((s) => s.partner === Partner.HK)?.skuCode ?? "",
+          rebelSku: i.partnerSkus.find((s) => s.partner === Partner.REBEL)?.skuCode ?? "",
           mrp: i.mrp,
           erpnextCode: i.erpnextCode,
           fulfillmentSourceId: i.fulfillmentSourceId,

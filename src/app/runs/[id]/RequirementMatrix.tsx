@@ -70,13 +70,18 @@ export default function RequirementMatrix({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [, start] = useTransition();
 
-  // lock body scroll while in fullscreen
+  // lock body scroll + allow Esc to leave fullscreen
   useEffect(() => {
     if (!fullscreen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
     };
   }, [fullscreen]);
 
@@ -301,9 +306,13 @@ export default function RequirementMatrix({
         )}
         <button
           onClick={() => setFullscreen((f) => !f)}
-          className="ml-auto rounded border border-neutral-300 px-2 py-1 text-xs font-medium hover:bg-neutral-50"
+          className={`ml-auto rounded px-2 py-1 text-xs font-medium ${
+            fullscreen
+              ? "bg-navy text-white hover:bg-navy-light"
+              : "border border-neutral-300 hover:bg-neutral-50"
+          }`}
         >
-          {fullscreen ? "✕ Exit full screen" : "⤢ Full screen"}
+          {fullscreen ? "✕ Exit full screen (Esc)" : "⤢ Full screen"}
         </button>
       </div>
       {table}
