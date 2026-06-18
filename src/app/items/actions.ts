@@ -89,6 +89,14 @@ export async function setItemRebelSku(itemId: string, sku: string): Promise<{ ok
   }
 }
 
+// Toggle an item active/inactive. Inactive items are hidden from runs (the
+// daily stock screen) and excluded from orders.
+export async function setItemActive(itemId: string, active: boolean) {
+  if (!(await isAdmin())) throw new Error("Admins only");
+  await prisma.item.update({ where: { id: itemId }, data: { active } });
+  revalidatePath("/items");
+}
+
 // Assign an item's fulfillment location (one of the 3 source places, or none).
 export async function setItemFulfillment(itemId: string, sourceId: string) {
   if (!(await isAdmin())) throw new Error("Admins only");

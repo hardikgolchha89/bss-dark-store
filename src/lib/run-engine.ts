@@ -62,6 +62,13 @@ export async function recomputeStore(
     ...overrideByItem.keys(),
     ...templateByItem.keys(),
   ]);
+  // inactive items are excluded from runs entirely (existing lines get dropped below)
+  const active = await prisma.item.findMany({
+    where: { id: { in: [...itemIds] }, active: true },
+    select: { id: true },
+  });
+  const activeSet = new Set(active.map((i) => i.id));
+  for (const id of itemIds) if (!activeSet.has(id)) itemIds.delete(id);
 
   const existing = await prisma.runRequirement.findMany({ where: { runId, storeId } });
   const existingByItem = new Map(existing.map((e) => [e.itemId, e]));
@@ -225,13 +232,6 @@ export async function reopenProcurement(runId: string): Promise<void> {
   });
 }
 
-async function assertDistribution(runId: string) {
-  const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
-  if (run.phase === "PROCUREMENT") {
-    throw new Error("Distribution is locked until goods are received (procurement phase).");
-  }
-}
-
 // ---- finalize -------------------------------------------------------------
 export async function finalizeRun(runId: string): Promise<void> {
   const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
@@ -280,7 +280,6 @@ function safeName(s: string): string {
 
 // PO workbook: one sheet per store, in the exact partner column layout.
 export async function buildPOExport(runId: string, partner: Partner): Promise<ExportFile> {
-  await assertDistribution(runId);
   const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
   const reqs = await prisma.runRequirement.findMany({
     where: { runId, store: { partner }, adjusted: { gt: 0 }, removed: false },
@@ -319,7 +318,6 @@ export async function buildPOExport(runId: string, partner: Partner): Promise<Ex
 
 // ERPNext Stock Entry (Material Transfer): single CSV across all stores.
 export async function buildErpExport(runId: string): Promise<ExportFile> {
-  await assertDistribution(runId);
   const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
   const settings = await getSettingsMap();
   const source = settings.erpnext_source_warehouse;
@@ -346,7 +344,6 @@ export async function buildErpExport(runId: string): Promise<ExportFile> {
 // Prime POs as a ZIP of one Kytchens-PO .xlsx per store (each keyed by that
 // store's partner SKU). CZ/Rebel stores included only if their flag is enabled.
 export async function buildPrimePoZip(runId: string): Promise<ExportFile> {
-  await assertDistribution(runId);
   const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
   const settings = await getSettingsMap();
   const enabledPartners = new Set<Partner>([Partner.HK]);
@@ -387,7 +384,6 @@ export async function buildPrimePoZip(runId: string): Promise<ExportFile> {
 // `invoice` is the ERP stock-entry number the user supplies at download time
 // (Rebel isn't connected to ERP) and is stamped on every row.
 export async function buildRebelPoZip(runId: string, invoice: string): Promise<ExportFile> {
-  await assertDistribution(runId);
   const inv = invoice.trim();
   if (!inv) throw new Error("A stock-entry / invoice number is required for Rebel POs.");
   const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
@@ -431,7 +427,6 @@ export async function buildRebelPoZip(runId: string, invoice: string): Promise<E
 
 // ERPNext stock entries as a ZIP of one Material-Transfer CSV per store.
 export async function buildErpZip(runId: string): Promise<ExportFile> {
-  await assertDistribution(runId);
   const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
   const settings = await getSettingsMap();
   const source = settings.erpnext_source_warehouse;

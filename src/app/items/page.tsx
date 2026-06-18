@@ -37,6 +37,7 @@ export default async function ItemsPage() {
           mrp: i.mrp,
           erpnextCode: i.erpnextCode,
           fulfillmentSourceId: i.fulfillmentSourceId,
+          active: i.active,
         }))}
       />
     </div>

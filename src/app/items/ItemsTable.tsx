@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { createItem, setItemFulfillment, setItemRebelSku, updateItem } from "./actions";
+import { createItem, setItemActive, setItemFulfillment, setItemRebelSku, updateItem } from "./actions";
 
 interface Item {
   id: string;
@@ -12,6 +12,7 @@ interface Item {
   mrp: number | null;
   erpnextCode: string | null;
   fulfillmentSourceId: string | null;
+  active: boolean;
 }
 
 export default function ItemsTable({
@@ -61,11 +62,12 @@ export default function ItemsTable({
               <th className="px-3 py-2 font-medium">ERPNext code</th>
               <th className="px-3 py-2 font-medium">Rebel SKU</th>
               <th className="px-3 py-2 font-medium">Fulfillment location</th>
+              <th className="px-3 py-2 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((i) => (
-              <tr key={i.id} className="border-t border-neutral-100">
+              <tr key={i.id} className={`border-t border-neutral-100 ${i.active ? "" : "bg-neutral-50/60 text-neutral-400"}`}>
                 <td className="px-3 py-1.5 tabular-nums text-neutral-500">{i.hkSku}</td>
                 <td className="px-3 py-1.5">{i.name}</td>
                 <td className="px-3 py-1.5 text-neutral-500">{i.category}</td>
@@ -130,11 +132,25 @@ export default function ItemsTable({
                     ))}
                   </select>
                 </td>
+                <td className="px-3 py-1.5">
+                  <button
+                    disabled={!canEdit}
+                    onClick={() => start(() => setItemActive(i.id, !i.active))}
+                    title={canEdit ? "Click to toggle — inactive items are hidden from runs" : ""}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium disabled:opacity-70 ${
+                      i.active
+                        ? "bg-green-100 text-green-700 hover:bg-green-200"
+                        : "bg-neutral-200 text-neutral-500 hover:bg-neutral-300"
+                    }`}
+                  >
+                    {i.active ? "Active" : "Inactive"}
+                  </button>
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={8} className="px-3 py-6 text-center text-neutral-400">
                   No matches.
                 </td>
               </tr>

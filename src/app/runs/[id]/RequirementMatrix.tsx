@@ -22,6 +22,7 @@ interface StoreCol {
   id: string;
   name: string;
   partner: string;
+  tier: string; // A/B/C
 }
 
 type Cell = {
@@ -60,7 +61,7 @@ export default function RequirementMatrix({
   const [q, setQ] = useState("");
   const [rowSort, setRowSort] = useState<RowSort>("source");
   const [rowDir, setRowDir] = useState<1 | -1>(1);
-  const [hiddenSources, setHiddenSources] = useState<Set<string>>(new Set());
+  const [sourceFilter, setSourceFilter] = useState<string>(""); // "" = all fulfillment locations
   const [storeSort, setStoreSort] = useState<StoreSort>("default");
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -123,14 +124,14 @@ export default function RequirementMatrix({
     const t = q.trim().toLowerCase();
     const filtered = items.filter(
       (i) =>
-        !hiddenSources.has(i.source) &&
+        (!sourceFilter || i.source === sourceFilter) &&
         (!t || i.itemName.toLowerCase().includes(t) || i.category.toLowerCase().includes(t)),
     );
     const key = (i: ItemRow) =>
       rowSort === "category" ? `${i.category}~${i.itemName}` : rowSort === "source" ? `${i.source}~${i.itemName}` : i.itemName;
     filtered.sort((a, b) => key(a).localeCompare(key(b)) * rowDir);
     return filtered;
-  }, [items, q, hiddenSources, rowSort, rowDir]);
+  }, [items, q, sourceFilter, rowSort, rowDir]);
 
   const grouped = rowSort !== "item";
   const groupOf = (i: ItemRow) => (rowSort === "category" ? i.category || "—" : i.source);
@@ -154,15 +155,6 @@ export default function RequirementMatrix({
         setStatus((s) => ({ ...s, [reqId]: "error" }));
         setErrors((e) => ({ ...e, [reqId]: res.message ?? "Save failed" }));
       }
-    });
-  }
-
-  function toggleSource(s: string) {
-    setHiddenSources((prev) => {
-      const n = new Set(prev);
-      if (n.has(s)) n.delete(s);
-      else n.add(s);
-      return n;
     });
   }
 
@@ -196,6 +188,9 @@ export default function RequirementMatrix({
                 }`}
               >
                 {s.name}
+                <span className="ml-1 rounded bg-navy/10 px-1 text-[10px] font-bold text-navy" title={`Tier ${s.tier}`}>
+                  {s.tier}
+                </span>
                 <span className="ml-1 font-normal text-neutral-400">{s.partner}</span>
               </th>
             ))}
@@ -285,24 +280,28 @@ export default function RequirementMatrix({
             <option value="partner">by Partner</option>
           </select>
         </label>
-        {allSources.length > 1 && (
-          <div className="flex flex-wrap items-center gap-1">
-            {allSources.map((s) => {
-              const on = !hiddenSources.has(s);
-              return (
-                <button
-                  key={s}
-                  onClick={() => toggleSource(s)}
-                  title={on ? "Click to hide" : "Click to show"}
-                  className={`rounded-full border px-2 py-0.5 text-[11px] ${
-                    on ? "border-navy/30 bg-navy/5 text-navy" : "border-neutral-200 bg-neutral-50 text-neutral-300 line-through"
-                  }`}
-                >
+        {allSources.length > 0 && (
+          <label
+            className={`flex items-center gap-1 text-xs ${
+              sourceFilter ? "font-medium text-navy" : "text-neutral-500"
+            }`}
+          >
+            Fulfillment
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className={`rounded border px-1.5 py-1 text-xs ${
+                sourceFilter ? "border-navy/40 bg-navy/5" : "border-neutral-300"
+              }`}
+            >
+              <option value="">All locations</option>
+              {allSources.map((s) => (
+                <option key={s} value={s}>
                   {s}
-                </button>
-              );
-            })}
-          </div>
+                </option>
+              ))}
+            </select>
+          </label>
         )}
         <button
           onClick={() => setFullscreen((f) => !f)}

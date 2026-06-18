@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Partner } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/current-user";
 import { ensureManualStores, getSettingsMap } from "@/lib/run-engine";
 import { getProcurementSummary } from "@/lib/procurement";
 import { asBool } from "@/lib/settings";
@@ -10,7 +9,6 @@ import UploadPanel from "./UploadPanel";
 import RequirementMatrix from "./RequirementMatrix";
 import FinalizeButton from "./FinalizeButton";
 import UnmappedPanel from "./UnmappedPanel";
-import PhaseControls from "./PhaseControls";
 import RemoveItemButton from "./RemoveItemButton";
 import DayTypeControl from "./DayTypeControl";
 import RebelPoDownload from "./RebelPoDownload";
@@ -26,7 +24,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const [stores, reqs, unmapped, items, settings] = await Promise.all([
     prisma.store.findMany({ where: { active: true }, orderBy: [{ partner: "asc" }, { sortOrder: "asc" }] }),
     prisma.runRequirement.findMany({
-      where: { runId: id, removed: false },
+      where: { runId: id, removed: false, item: { active: true } },
       include: {
         item: { include: { partnerSkus: { where: { partner: Partner.HK } }, fulfillmentSource: true } },
         store: true,
@@ -58,8 +56,6 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const isFinal = run.status === "FINALIZED";
-  const isProcurement = run.phase === "PROCUREMENT";
-  const isAdminUser = await isAdmin();
   const storesWithStock = new Set(reqs.map((r) => r.storeId));
   const notUploaded = stores.filter((s) => !storesWithStock.has(s.id));
   const anomalies = reqs.filter((r) => r.liveUsed < 0).length;
@@ -89,26 +85,39 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const storesWithLines = new Set(gridRows.map((r) => r.storeId));
   const matrixStores = stores
     .filter((s) => storesWithLines.has(s.id))
-    .map((s) => ({ id: s.id, name: s.name, partner: String(s.partner) }));
+    .map((s) => ({ id: s.id, name: s.name, partner: String(s.partner), tier: s.tier }));
 
-  // Order preview: consolidated by item, mapped lines only (what's actually pushed).
-  const orderMap = new Map<string, { itemId: string; sku: string; name: string; category: string; total: number; stores: number }>();
+  // Consolidated by item: live / par / suggested / adjusted totalled across
+  // stores, so they can compare the four columns before submitting.
+  const orderMap = new Map<
+    string,
+    { itemId: string; sku: string; name: string; category: string; stores: number; live: number; par: number; suggested: number; adjusted: number }
+  >();
   for (const r of reqs) {
-    if (r.adjusted <= 0) continue;
+    if (r.adjusted <= 0 && r.suggested <= 0) continue;
     const g = orderMap.get(r.itemId) ?? {
       itemId: r.itemId,
       sku: r.item.partnerSkus[0]?.skuCode ?? "",
       name: r.item.name,
       category: r.item.category ?? "",
-      total: 0,
       stores: 0,
+      live: 0,
+      par: 0,
+      suggested: 0,
+      adjusted: 0,
     };
-    g.total += r.adjusted;
     g.stores += 1;
+    g.live += r.liveUsed;
+    g.par += r.parUsed;
+    g.suggested += r.suggested;
+    g.adjusted += r.adjusted;
     orderMap.set(r.itemId, g);
   }
   const orderLines = [...orderMap.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const orderLineCount = reqs.filter((r) => r.adjusted > 0).length;
+  const orderTotals = orderLines.reduce(
+    (a, l) => ({ live: a.live + l.live, par: a.par + l.par, suggested: a.suggested + l.suggested, adjusted: a.adjusted + l.adjusted }),
+    { live: 0, par: 0, suggested: 0, adjusted: 0 },
+  );
 
   return (
     <div className="space-y-6">
@@ -138,20 +147,11 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           >
             {run.status}
           </span>
-          {!isFinal && !isProcurement && (
+          {!isFinal && (
             <FinalizeButton runId={id} unresolvedUnmapped={unresolvedUnmapped} blockOnUnmapped={asBool(settings.block_finalize_on_unmapped)} />
           )}
         </div>
       </div>
-
-      {/* Phase tracker */}
-      <PhaseControls
-        runId={id}
-        phase={run.phase}
-        isFinal={isFinal}
-        isAdmin={isAdminUser}
-        receivedAt={run.receivedAt ? run.receivedAt.toISOString() : null}
-      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -202,11 +202,11 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
 
       <RequirementMatrix runId={id} rows={gridRows} stores={matrixStores} isFinal={isFinal} />
 
-      <OrderPreview runId={id} lines={orderLines} lineCount={orderLineCount} isFinal={isFinal} />
+      <OrderPreview runId={id} lines={orderLines} totals={orderTotals} isFinal={isFinal} />
 
       <ProcurementPanel runId={id} procurement={procurement} />
 
-      <ExportsBar runId={id} isFinal={isFinal} locked={isProcurement} settings={settings} />
+      <ExportsBar runId={id} isFinal={isFinal} settings={settings} />
     </div>
   );
 }
@@ -214,23 +214,24 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
 function OrderPreview({
   runId,
   lines,
-  lineCount,
+  totals,
   isFinal,
 }: {
   runId: string;
-  lines: { itemId: string; sku: string; name: string; category: string; total: number; stores: number }[];
-  lineCount: number;
+  lines: { itemId: string; sku: string; name: string; category: string; stores: number; live: number; par: number; suggested: number; adjusted: number }[];
+  totals: { live: number; par: number; suggested: number; adjusted: number };
   isFinal: boolean;
 }) {
-  const grandTotal = lines.reduce((a, l) => a + l.total, 0);
   return (
     <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
       <details open>
         <summary className="cursor-pointer list-none border-b border-neutral-200 p-3 text-sm font-semibold">
-          Order preview — {lines.length} items · {lineCount} store-lines · {grandTotal.toLocaleString()} units
-          <span className="ml-2 font-normal text-neutral-400">(mapped items only, what gets exported)</span>
+          Consolidated — {lines.length} items
+          <span className="ml-2 font-normal text-neutral-400">
+            (totalled across stores · compare Live / Par / Suggested / Adjusted before submitting)
+          </span>
         </summary>
-        <div className="max-h-[50vh] overflow-auto">
+        <div className="max-h-[55vh] overflow-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-neutral-100 text-left text-neutral-500">
               <tr>
@@ -238,15 +239,18 @@ function OrderPreview({
                 <th className="px-3 py-2 font-medium">Item</th>
                 <th className="px-3 py-2 font-medium">Category</th>
                 <th className="px-3 py-2 text-right font-medium">Stores</th>
-                <th className="px-3 py-2 text-right font-medium">Total qty</th>
+                <th className="px-3 py-2 text-right font-medium">Live</th>
+                <th className="px-3 py-2 text-right font-medium">Par</th>
+                <th className="px-3 py-2 text-right font-medium">Suggested</th>
+                <th className="px-3 py-2 text-right font-medium">Adjusted</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {lines.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-neutral-400">
-                    Nothing to order yet (all adjusted quantities are zero).
+                  <td colSpan={9} className="px-3 py-6 text-center text-neutral-400">
+                    Nothing to order yet.
                   </td>
                 </tr>
               )}
@@ -256,13 +260,28 @@ function OrderPreview({
                   <td className="px-3 py-1.5">{l.name}</td>
                   <td className="px-3 py-1.5 text-neutral-500">{l.category}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-neutral-500">{l.stores}</td>
-                  <td className="px-3 py-1.5 text-right font-medium tabular-nums">{l.total}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-neutral-500">{l.live}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-neutral-500">{l.par}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-neutral-400">{l.suggested}</td>
+                  <td className="px-3 py-1.5 text-right font-medium tabular-nums">{l.adjusted}</td>
                   <td className="px-2 py-1.5 text-right">
                     {!isFinal && <RemoveItemButton runId={runId} itemId={l.itemId} name={l.name} />}
                   </td>
                 </tr>
               ))}
             </tbody>
+            <tfoot className="sticky bottom-0 border-t-2 border-neutral-300 bg-neutral-50 font-semibold">
+              <tr>
+                <td className="px-3 py-2" colSpan={4}>
+                  Totals
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">{totals.live.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{totals.par.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{totals.suggested.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{totals.adjusted.toLocaleString()}</td>
+                <td className="px-2 py-2"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </details>
@@ -379,12 +398,10 @@ function Kpi({ label, value }: { label: string; value: string }) {
 function ExportsBar({
   runId,
   isFinal,
-  locked,
   settings,
 }: {
   runId: string;
   isFinal: boolean;
-  locked: boolean;
   settings: Record<string, string>;
 }) {
   const links: { type: string; label: string }[] = [
@@ -400,32 +417,23 @@ function ExportsBar({
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-4">
       <h2 className="mb-2 text-sm font-semibold">Distribution exports (per store)</h2>
-      {locked ? (
-        <p className="text-xs text-neutral-500">
-          🔒 Locked until goods are received. Finish the procurement step above and mark the run received to unlock
-          the per-store POs and ERPNext stock entry.
+      {!isFinal && (
+        <p className="mb-3 text-xs text-amber-700">
+          Draft — exports reflect current adjusted values; finalize to freeze the record.
         </p>
-      ) : (
-        <>
-          {!isFinal && (
-            <p className="mb-3 text-xs text-amber-700">
-              Draft — exports reflect current adjusted values; finalize to freeze the record.
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            {links.map((l) => (
-              <a
-                key={l.type}
-                href={`/api/runs/${runId}/export?type=${l.type}`}
-                className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-50"
-              >
-                ↓ {l.label}
-              </a>
-            ))}
-            <RebelPoDownload runId={runId} />
-          </div>
-        </>
       )}
+      <div className="flex flex-wrap items-center gap-2">
+        {links.map((l) => (
+          <a
+            key={l.type}
+            href={`/api/runs/${runId}/export?type=${l.type}`}
+            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-50"
+          >
+            ↓ {l.label}
+          </a>
+        ))}
+        <RebelPoDownload runId={runId} />
+      </div>
     </section>
   );
 }
