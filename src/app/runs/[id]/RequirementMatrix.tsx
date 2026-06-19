@@ -456,6 +456,7 @@ function CellGroup({
             disabled={isFinal}
             onBlur={(e) => {
               const n = Math.max(0, Math.round(Number(e.target.value)));
+              e.target.value = String(n); // normalize display: cleared -> 0, "07" -> "7"
               if (n !== (value ?? cell.adjusted)) onSave(cell, n);
             }}
             className={`w-12 rounded border px-1 py-0.5 text-right tabular-nums ${
