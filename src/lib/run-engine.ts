@@ -203,7 +203,7 @@ export async function setAdjusted(
   reqId: string,
   qty: number,
   expectedUpdatedAt: Date,
-): Promise<void> {
+): Promise<Date> {
   const result = await prisma.runRequirement.updateMany({
     where: { id: reqId, updatedAt: expectedUpdatedAt },
     data: { adjusted: Math.max(0, Math.round(qty)), edited: true },
@@ -211,6 +211,12 @@ export async function setAdjusted(
   if (result.count === 0) {
     throw new ConcurrencyError("This line was changed by someone else. Refresh and retry.");
   }
+  // return the row's fresh updatedAt so the client can edit the same cell again
+  const row = await prisma.runRequirement.findUniqueOrThrow({
+    where: { id: reqId },
+    select: { updatedAt: true },
+  });
+  return row.updatedAt;
 }
 
 // ---- procurement -> distribution gate -------------------------------------

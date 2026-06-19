@@ -90,12 +90,12 @@ export async function saveAdjusted(
   reqId: string,
   qty: number,
   expectedUpdatedAt: string,
-): Promise<{ ok: boolean; message?: string }> {
+): Promise<{ ok: boolean; message?: string; updatedAt?: string }> {
   await assertDraft(runId);
   try {
-    await setAdjusted(reqId, qty, new Date(expectedUpdatedAt));
+    const updatedAt = await setAdjusted(reqId, qty, new Date(expectedUpdatedAt));
     revalidatePath(`/runs/${runId}`);
-    return { ok: true };
+    return { ok: true, updatedAt: updatedAt.toISOString() };
   } catch (e) {
     if (e instanceof ConcurrencyError) return { ok: false, message: e.message };
     return { ok: false, message: (e as Error).message };

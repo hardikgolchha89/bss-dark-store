@@ -145,7 +145,8 @@ export default function RequirementMatrix({
       const res = await saveAdjusted(runId, reqId, value, expected);
       if (res.ok) {
         setStatus((s) => ({ ...s, [reqId]: "saved" }));
-        setVersions((v) => ({ ...v, [reqId]: new Date().toISOString() }));
+        // store the row's REAL new updatedAt so re-editing the same cell works
+        if (res.updatedAt) setVersions((v) => ({ ...v, [reqId]: res.updatedAt! }));
         setErrors((e) => {
           const n = { ...e };
           delete n[reqId];
