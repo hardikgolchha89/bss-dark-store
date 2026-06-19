@@ -134,12 +134,15 @@ export async function ensureManualStores(runId: string): Promise<void> {
 
 export async function recomputeAll(runId: string): Promise<void> {
   const pct = await getRunBufferPct(runId);
-  const storeIds = await prisma.runStock.findMany({
-    where: { runId },
-    distinct: ["storeId"],
-    select: { storeId: true },
-  });
-  for (const { storeId } of storeIds) await recomputeStore(runId, storeId, pct);
+  // Every store in the run = HK stores with uploaded stock UNION the manual
+  // (CZ/Rebel) stores seeded at live=0. Deriving only from runStock skipped the
+  // manual stores, so day-type buffers never reached them.
+  const [stockStores, manualStores] = await Promise.all([
+    prisma.runStock.findMany({ where: { runId }, distinct: ["storeId"], select: { storeId: true } }),
+    prisma.store.findMany({ where: { active: true, partner: { not: Partner.HK } }, select: { id: true } }),
+  ]);
+  const storeIds = new Set<string>([...stockStores.map((s) => s.storeId), ...manualStores.map((s) => s.id)]);
+  for (const storeId of storeIds) await recomputeStore(runId, storeId, pct);
 }
 
 // Change a run's day type (Normal/Weekend/Peak) and re-apply the buffer.
