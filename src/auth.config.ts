@@ -6,12 +6,15 @@ const allowedEmails = (process.env.AUTH_ALLOWED_EMAILS ?? "")
   .split(",")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
-const allowedDomain = (process.env.AUTH_ALLOWED_DOMAIN ?? "").trim().toLowerCase();
+const allowedDomains = (process.env.AUTH_ALLOWED_DOMAIN ?? "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
 
 function isAllowed(email: string | null | undefined): boolean {
   const e = (email ?? "").toLowerCase();
   if (!e) return false;
-  if (allowedDomain && e.endsWith(`@${allowedDomain}`)) return true;
+  if (allowedDomains.some((d) => e.endsWith(`@${d}`))) return true;
   return allowedEmails.includes(e);
 }
 
