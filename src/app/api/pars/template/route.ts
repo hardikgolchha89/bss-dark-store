@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { buildParTemplateRows } from "@/lib/par";
-import { toXlsxBuffer } from "@/lib/exports";
+import { toCsvString } from "@/lib/exports";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const rows = await buildParTemplateRows();
-  const buffer = toXlsxBuffer(rows, "Pars");
-  return new NextResponse(new Uint8Array(buffer), {
+  const csv = toCsvString(rows);
+  return new NextResponse(csv, {
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="par_template.xlsx"`,
+      "Content-Type": "text/csv",
+      "Content-Disposition": `attachment; filename="par_template.csv"`,
     },
   });
 }

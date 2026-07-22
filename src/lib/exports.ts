@@ -125,14 +125,60 @@ export function buildConsolidatedRows(lines: ConsolidatedLine[]): (string | numb
   return rows;
 }
 
-// ---- serializers ----------------------------------------------------------
-export function toXlsxBuffer(rows: (string | number)[][], sheetName = "Sheet1"): Buffer {
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+// ---- Consolidated grid (store columns × item rows) ------------------------
+// Same pivot as the on-screen requirement matrix, but a single number per cell:
+// the adjusted (actual-sent) quantity. Blank where nothing is sent to a store.
+export interface MatrixStore {
+  id: string;
+  name: string;
+}
+export interface MatrixItem {
+  skuCode: string;
+  name: string;
+  category: string;
+  qtyByStore: Record<string, number>; // storeId -> adjusted qty
 }
 
+export function buildMatrixRows(items: MatrixItem[], stores: MatrixStore[]): (string | number)[][] {
+  const header = ["SKU", "Name", "Category", ...stores.map((s) => s.name), "Total"];
+  const rows: (string | number)[][] = [header];
+  const colTotals = new Array(stores.length).fill(0);
+  let grand = 0;
+  for (const it of items) {
+    let rowTotal = 0;
+    const cells: (string | number)[] = stores.map((s, i) => {
+      const q = it.qtyByStore[s.id] ?? 0;
+      colTotals[i] += q;
+      rowTotal += q;
+      return q > 0 ? q : ""; // blank, not 0, so the printout only shows real sends
+    });
+    if (rowTotal <= 0) continue; // drop items sent nowhere
+    grand += rowTotal;
+    rows.push([it.skuCode, it.name, it.category, ...cells, rowTotal]);
+  }
+  rows.push(["", "Total", "", ...colTotals.map((t) => (t > 0 ? t : "")), grand]);
+  return rows;
+}
+
+// ---- Items master (SKU cross-reference) -----------------------------------
+export interface ItemCsvLine {
+  hkSku: string;
+  name: string;
+  erpnextCode: string;
+  rebelSku: string;
+}
+
+export function buildItemsCsvRows(items: ItemCsvLine[]): (string | number)[][] {
+  const rows: (string | number)[][] = [["HK SKU", "Name", "ERPNext Code", "Rebel SKU"]];
+  for (const it of items) {
+    rows.push([it.hkSku, it.name, it.erpnextCode, it.rebelSku]);
+  }
+  return rows;
+}
+
+// ---- serializers ----------------------------------------------------------
+// CSV only — all downloads in this app are CSV, never xlsx. (xlsx is still an
+// accepted *upload* format; that parsing lives in prime-csv.ts / par actions.)
 export function toCsvString(rows: (string | number)[][]): string {
   const ws = XLSX.utils.aoa_to_sheet(rows);
   return XLSX.utils.sheet_to_csv(ws);

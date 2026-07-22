@@ -411,6 +411,7 @@ function ExportsBar({
     links.push({ type: "erp_zip", label: "ERPNext stock entries — per store (.zip)" });
   }
   links.push({ type: "consolidated", label: "Consolidated printout" });
+  links.push({ type: "matrix", label: "Consolidated grid — store × product" });
   // single-file fallbacks
   links.push({ type: "po_hk", label: "HK PO — one file (all stores)" });
 

@@ -4,6 +4,7 @@ import {
   buildConsolidatedExport,
   buildErpExport,
   buildErpZip,
+  buildMatrixExport,
   buildPOExport,
   buildPrimePoZip,
   buildRebelPoZip,
@@ -46,6 +47,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       }
       case "consolidated":
         file = await buildConsolidatedExport(id);
+        break;
+      case "matrix":
+        file = await buildMatrixExport(id);
         break;
       case "mr": {
         const sourceId = req.nextUrl.searchParams.get("source") ?? "";

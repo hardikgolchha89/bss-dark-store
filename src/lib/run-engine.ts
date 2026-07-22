@@ -4,11 +4,14 @@ import { prisma } from "./prisma";
 import { resolvePar, suggestedQty } from "./requirement";
 import {
   buildConsolidatedRows,
+  buildMatrixRows,
   buildPORows,
   buildRebelPoRows,
   toCsvString,
-  toXlsxBuffer,
+  PO_HEADER,
   type ConsolidatedLine,
+  type MatrixItem,
+  type MatrixStore,
   type POLine,
   type RebelPoLine,
 } from "./exports";
@@ -88,14 +91,17 @@ export async function recomputeStore(
             parUsed: par,
             liveUsed: live,
             suggested,
-            adjusted: prev.edited ? prev.adjusted : suggested,
+            // Start un-edited cells at 0 (not suggested) so the operator must
+            // type each quantity and thereby verify every cell against S.
+            adjusted: prev.edited ? prev.adjusted : 0,
           },
         }),
       );
     } else {
       ops.push(
         prisma.runRequirement.create({
-          data: { runId, storeId, itemId, parUsed: par, liveUsed: live, suggested, adjusted: suggested },
+          // New lines seed adjusted=0 so the operator types (and verifies) every cell.
+          data: { runId, storeId, itemId, parUsed: par, liveUsed: live, suggested, adjusted: 0 },
         }),
       );
     }
@@ -269,7 +275,7 @@ export interface ExportFile {
   contentType: string;
 }
 
-const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const CSV_MIME = "text/csv";
 
 function dateTag(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -308,20 +314,17 @@ export async function buildPOExport(runId: string, partner: Partner): Promise<Ex
     byStore.set(r.storeId, g);
   }
 
-  const XLSX = await import("xlsx");
-  const wb = XLSX.utils.book_new();
-  if (byStore.size === 0) {
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildPORows([])), "empty");
-  }
+  // One flat CSV across all stores (a sheet-per-store workbook can't be CSV),
+  // with a leading Store column so store context survives the flattening.
+  const rows: (string | number)[][] = [["Store", ...PO_HEADER]];
   for (const { name, lines } of byStore.values()) {
-    const ws = XLSX.utils.aoa_to_sheet(buildPORows(lines));
-    XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+    const [, ...body] = buildPORows(lines); // drop the repeated header row
+    for (const r of body) rows.push([name, ...r]);
   }
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   return {
-    filename: `PO_${partner}_${dateTag(run.runDate)}.xlsx`,
-    buffer,
-    contentType: XLSX_MIME,
+    filename: `PO_${partner}_${dateTag(run.runDate)}.csv`,
+    buffer: Buffer.from(toCsvString(rows), "utf-8"),
+    contentType: CSV_MIME,
   };
 }
 
@@ -379,7 +382,7 @@ export async function buildPrimePoZip(runId: string): Promise<ExportFile> {
   const zip = new JSZip();
   for (const { name, lines } of byStore.values()) {
     if (!lines.length) continue;
-    zip.file(`PO_${safeName(name)}.xlsx`, toXlsxBuffer(buildPORows(lines), name));
+    zip.file(`PO_${safeName(name)}.csv`, toCsvString(buildPORows(lines)));
   }
   const buffer = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer;
   return {
@@ -488,8 +491,44 @@ export async function buildConsolidatedExport(runId: string): Promise<ExportFile
   }
   const lines = [...byItem.values()].sort((a, b) => a.name.localeCompare(b.name));
   return {
-    filename: `Consolidated_${dateTag(run.runDate)}.xlsx`,
-    buffer: toXlsxBuffer(buildConsolidatedRows(lines), "Consolidated"),
-    contentType: XLSX_MIME,
+    filename: `Consolidated_${dateTag(run.runDate)}.csv`,
+    buffer: Buffer.from(toCsvString(buildConsolidatedRows(lines)), "utf-8"),
+    contentType: CSV_MIME,
+  };
+}
+
+// Consolidated grid: store columns × item rows, one adjusted (actual-sent)
+// number per cell — the pivot of the requirement matrix without L/P/S.
+export async function buildMatrixExport(runId: string): Promise<ExportFile> {
+  const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
+  const reqs = await prisma.runRequirement.findMany({
+    where: { runId, adjusted: { gt: 0 }, removed: false },
+    include: {
+      store: true,
+      item: { include: { partnerSkus: { where: { partner: Partner.HK } } } },
+    },
+    // store sortOrder drives column order; first-seen insertion below preserves it.
+    orderBy: [{ store: { sortOrder: "asc" } }, { item: { name: "asc" } }],
+  });
+
+  const storeMap = new Map<string, MatrixStore>(); // only stores that actually send
+  const itemMap = new Map<string, MatrixItem>();
+  for (const r of reqs) {
+    if (!storeMap.has(r.storeId)) storeMap.set(r.storeId, { id: r.storeId, name: r.store.name });
+    const it = itemMap.get(r.itemId) ?? {
+      skuCode: r.item.partnerSkus[0]?.skuCode ?? "",
+      name: r.item.name,
+      category: r.item.category ?? "",
+      qtyByStore: {},
+    };
+    it.qtyByStore[r.storeId] = (it.qtyByStore[r.storeId] ?? 0) + r.adjusted;
+    itemMap.set(r.itemId, it);
+  }
+  const stores = [...storeMap.values()]; // in store.sortOrder (Map keeps insertion order)
+  const items = [...itemMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return {
+    filename: `ConsolidatedGrid_${dateTag(run.runDate)}.csv`,
+    buffer: Buffer.from(toCsvString(buildMatrixRows(items, stores)), "utf-8"),
+    contentType: CSV_MIME,
   };
 }

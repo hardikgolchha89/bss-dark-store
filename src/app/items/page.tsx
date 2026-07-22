@@ -17,12 +17,20 @@ export default async function ItemsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Items ({items.length})</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          The SKU master. {canEdit ? "Add MRP and ERPNext codes inline (saved instantly)." : "Read-only."}{" "}
-          ERPNext export only includes items with a code.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold">Items ({items.length})</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            The SKU master. {canEdit ? "Add MRP and ERPNext codes inline (saved instantly)." : "Read-only."}{" "}
+            ERPNext export only includes items with a code.
+          </p>
+        </div>
+        <a
+          href="/api/items/export"
+          className="shrink-0 rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-50"
+        >
+          ↓ Export CSV (HK SKU · Name · ERPNext · Rebel SKU)
+        </a>
       </div>
       {canEdit && <ErpCodeUpload />}
       <ItemsTable
