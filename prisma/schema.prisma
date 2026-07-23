@@ -54,6 +54,14 @@ enum Role {
   MEMBER
 }
 
+// Self-service access: anyone can sign in, but only APPROVED (or company-domain)
+// users may use the app. New external sign-ins start PENDING until an admin acts.
+enum AccessStatus {
+  PENDING
+  APPROVED
+  BLOCKED
+}
+
 // ---------------------------------------------------------------------------
 // Catalog
 // ---------------------------------------------------------------------------
@@ -292,6 +300,7 @@ model User {
   emailVerified DateTime? @map("email_verified")
   image         String?
   role          Role      @default(MEMBER)
+  status        AccessStatus @default(PENDING) @map("access_status")
 
   accounts Account[]
   sessions Session[]

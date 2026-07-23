@@ -22,7 +22,9 @@ export default function SignInPage({
             Continue with Google
           </button>
         </form>
-        <p className="mt-4 text-xs text-neutral-400">Access is limited to approved accounts.</p>
+        <p className="mt-4 text-xs text-neutral-400">
+          New here? Sign in and an admin will approve your access.
+        </p>
       </div>
     </div>
   );

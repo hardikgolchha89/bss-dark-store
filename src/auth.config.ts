@@ -2,22 +2,6 @@ import Google from "next-auth/providers/google";
 import type { NextAuthConfig } from "next-auth";
 
 // Edge-safe config (no Prisma) — shared by middleware and the full auth instance.
-const allowedEmails = (process.env.AUTH_ALLOWED_EMAILS ?? "")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
-const allowedDomains = (process.env.AUTH_ALLOWED_DOMAIN ?? "")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
-
-function isAllowed(email: string | null | undefined): boolean {
-  const e = (email ?? "").toLowerCase();
-  if (!e) return false;
-  if (allowedDomains.some((d) => e.endsWith(`@${d}`))) return true;
-  return allowedEmails.includes(e);
-}
-
 export const authConfig = {
   providers: [
     Google({
@@ -28,11 +12,14 @@ export const authConfig = {
   pages: { signIn: "/signin" },
   trustHost: true,
   callbacks: {
-    // Allowlist gate: only approved emails/domain may sign in.
-    signIn({ user }) {
-      return isAllowed(user.email);
+    // Sign-in is OPEN to any Google account — new users land on the "pending"
+    // screen and request access. Whether they can actually USE the app is
+    // decided by isApproved() (see @/lib/access) at the page/API layer, which
+    // needs the DB and can't run in this edge-shared config.
+    signIn() {
+      return true;
     },
-    // Middleware uses this: signed-in users only, everywhere.
+    // Middleware uses this: must be signed in for every protected route.
     authorized({ auth }) {
       return !!auth?.user;
     },

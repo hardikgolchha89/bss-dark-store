@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 import UserMenu from "./UserMenu";
+import AccessPending from "./AccessPending";
+import { getAccess } from "@/lib/current-user";
 
 export const metadata: Metadata = {
   title: "BSS Darkstore Replenishment",
@@ -18,7 +20,13 @@ const NAV = [
   { href: "/admin", label: "Admin" },
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Access gate: a signed-in but unapproved user sees the pending screen on every
+  // route (no nav, no data) until an admin approves them. Signed-out users fall
+  // through to `children` (e.g. the /signin page); middleware handles the redirect.
+  const { user, approved, blocked } = await getAccess();
+  const gated = !!user && !approved;
+
   return (
     <html lang="en">
       <body className="min-h-screen bg-cream text-navy antialiased">
@@ -31,21 +39,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 Darkstore Ops
               </span>
             </Link>
-            <nav className="ml-auto flex gap-1 text-sm">
-              {NAV.map((n) => (
-                <Link
-                  key={n.href}
-                  href={n.href}
-                  className="rounded-md px-3 py-1.5 font-medium text-ink-soft transition-colors hover:bg-teal/10 hover:text-teal-dark"
-                >
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
+            {approved && (
+              <nav className="ml-auto flex gap-1 text-sm">
+                {NAV.map((n) => (
+                  <Link
+                    key={n.href}
+                    href={n.href}
+                    className="rounded-md px-3 py-1.5 font-medium text-ink-soft transition-colors hover:bg-teal/10 hover:text-teal-dark"
+                  >
+                    {n.label}
+                  </Link>
+                ))}
+              </nav>
+            )}
             <UserMenu />
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-6">
+          {gated ? <AccessPending email={user.email} blocked={blocked} /> : children}
+        </main>
       </body>
     </html>
   );

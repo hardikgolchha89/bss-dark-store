@@ -2,11 +2,17 @@ import { NextResponse } from "next/server";
 import { Partner } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildItemsCsvRows, toCsvString, type ItemCsvLine } from "@/lib/exports";
+import { assertApproved } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 
 // Items master cross-reference: HK SKU, Name, ERPNext Code, Rebel SKU (CSV).
 export async function GET() {
+  try {
+    await assertApproved();
+  } catch {
+    return NextResponse.json({ error: "Access not approved" }, { status: 403 });
+  }
   const items = await prisma.item.findMany({
     where: { active: true },
     include: { partnerSkus: { where: { partner: { in: [Partner.HK, Partner.REBEL] } } } },

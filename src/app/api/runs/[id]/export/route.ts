@@ -11,8 +11,14 @@ import {
   type ExportFile,
 } from "@/lib/run-engine";
 import { buildMaterialRequestExport } from "@/lib/procurement";
+import { assertApproved } from "@/lib/current-user";
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    await assertApproved();
+  } catch {
+    return NextResponse.json({ error: "Access not approved" }, { status: 403 });
+  }
   const { id } = await ctx.params;
   const type = req.nextUrl.searchParams.get("type") ?? "";
 
